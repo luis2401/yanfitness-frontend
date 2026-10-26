@@ -21,6 +21,7 @@ const FormularioSuscripcionModal = ({
   onClose,
   socioPreseleccionado = null,
   onSuccess,
+  onSwitchToPaseDiario = null,
 }) => {
   const { showToast, sedeTurno } = useAuth();
   const [socios, setSocios] = useState([]);
@@ -35,11 +36,16 @@ const FormularioSuscripcionModal = ({
   const [errorMsg, setErrorMsg] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const getLocalToday = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  };
+
   const [form, setForm] = useState({
     socioId: "",
     sedeId: "",
     planSedeId: "",
-    fechaInicio: new Date().toISOString().split("T")[0],
+    fechaInicio: getLocalToday(),
     accesoMultisede: false,
     precioVendido: "",
     precioLista: "",
@@ -69,7 +75,6 @@ const FormularioSuscripcionModal = ({
       const data = await planesService.obtenerPlanesPorSede(sedeId, true);
       const lista = Array.isArray(data) ? data : [];
 
-      // Vincular cada PlanSede con su duración en días del plan maestro
       const combinados = lista.map((ps) => {
         const master = plansList.find(
           (m) => m.id === ps.planId || m.nombre === ps.planNombre
@@ -77,6 +82,7 @@ const FormularioSuscripcionModal = ({
         return {
           ...ps,
           duracionDias: master?.duracionDias || ps.duracionDias || 30,
+          condiciones: master?.condiciones || ps.condiciones || "",
         };
       });
 
@@ -110,7 +116,6 @@ const FormularioSuscripcionModal = ({
     }
   };
 
-  // Carga inicial de datos al abrir el modal
   useEffect(() => {
     if (isOpen) {
       Promise.all([
@@ -118,23 +123,29 @@ const FormularioSuscripcionModal = ({
         sedesService.listar(true).catch(() => []),
         planesService.listar(true).catch(() => []),
       ]).then(([sociosData, sedesData, masterPlanesData]) => {
-        const sList = Array.isArray(sociosData) ? sociosData : [];
-        const sedesList = Array.isArray(sedesData) ? sedesData : [];
-        const mPlanes = Array.isArray(masterPlanesData) ? masterPlanesData : [];
+        let sList = Array.isArray(sociosData) ? sociosData : sociosData?.content || [];
+        const sedesList = Array.isArray(sedesData) ? sedesData : sedesData?.content || [];
+        const mPlanes = Array.isArray(masterPlanesData) ? masterPlanesData : masterPlanesData?.content || [];
+
+        if (socioPreseleccionado?.id && !sList.some((s) => Number(s.id) === Number(socioPreseleccionado.id))) {
+          sList = [socioPreseleccionado, ...sList];
+        }
 
         setSocios(sList);
         setSedes(sedesList);
         setMasterPlanes(mPlanes);
 
         const initialSocioId = socioPreseleccionado?.id || (sList?.[0]?.id ?? "");
-        const initialSedeId = (sedeTurno && sedesList.some((s) => s.id === sedeTurno.id))
-          ? sedeTurno.id
-          : (sedesList?.[0]?.id ?? "");
+        const initialSedeId =
+          sedeTurno && sedesList.some((s) => s.id === sedeTurno.id)
+            ? sedeTurno.id
+            : sedesList?.[0]?.id ?? "";
 
         setForm((prev) => ({
           ...prev,
           socioId: initialSocioId,
           sedeId: initialSedeId,
+          fechaInicio: getLocalToday(),
         }));
 
         if (initialSedeId) {
@@ -224,6 +235,12 @@ const FormularioSuscripcionModal = ({
     return errors;
   };
 
+  const socioActualObj =
+    socios.find((s) => Number(s.id) === Number(form.socioId)) ||
+    (socioPreseleccionado && Number(socioPreseleccionado.id) === Number(form.socioId)
+      ? socioPreseleccionado
+      : null);
+
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setErrorMsg("");
@@ -235,25 +252,41 @@ const FormularioSuscripcionModal = ({
     }
 
     setLoading(true);
+    const estabaInactivo = socioActualObj ? !socioActualObj.activo : true;
 
     try {
+      // Aseguramos que el socio esté activo antes de registrar la suscripción
+      await sociosService.cambiarEstado(Number(form.socioId), true).catch(() => {});
+
+      const precioEsperadoLista =
+        Number(precioBaseSede || 0) + (form.accesoMultisede ? Number(recargoMultisede || 0) : 0);
+      const precioCobrado = Number(form.precioVendido);
+      const difiereDeLista =
+        precioEsperadoLista > 0 && Math.abs(precioCobrado - precioEsperadoLista) > 0.009;
+      const observacionFinal =
+        form.observacionPrecio.trim() ||
+        (difiereDeLista
+          ? `Ajuste de tarifa en caja (Precio lista: S/ ${precioEsperadoLista.toFixed(2)})`
+          : null);
+
       await suscripcionesService.crear({
         socioId: Number(form.socioId),
         planSedeId: Number(form.planSedeId),
         fechaInicio: form.fechaInicio || null,
-        accesoMultisede: form.accesoMultisede,
-        precioVendido: Number(form.precioVendido),
-        observacionPrecio: form.observacionPrecio.trim() || null,
+        accesoMultisede: Boolean(form.accesoMultisede),
+        precioVendido: precioCobrado,
+        observacionPrecio: observacionFinal,
         metodoPago: form.metodoPago,
         numeroOperacion: form.numeroOperacion.trim() || null,
       });
 
-      // Activación automática del socio tras el cobro exitoso
-      await sociosService.cambiarEstado(Number(form.socioId), true).catch(() => {});
-
       showToast("Membresía registrada y socio activado exitosamente", "success");
       onSuccess();
     } catch (err) {
+      // Si falló la venta y el socio estaba originalmente inactivo, revertimos su estado a inactivo
+      if (estabaInactivo) {
+        await sociosService.cambiarEstado(Number(form.socioId), false).catch(() => {});
+      }
       setErrorMsg(err.message || "Error al registrar la suscripción.");
     } finally {
       setLoading(false);
@@ -268,7 +301,11 @@ const FormularioSuscripcionModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Venta y Activación de Membresía"
+      title={
+        socioPreseleccionado
+          ? `Venta de Membresía — ${socioPreseleccionado.nombre} ${socioPreseleccionado.apellido || ""}`
+          : "Venta y Activación de Membresía"
+      }
       size="lg"
       footer={
         <>
@@ -278,7 +315,7 @@ const FormularioSuscripcionModal = ({
             onClick={onClose}
             disabled={loading}
           >
-            Cancelar
+            {socioPreseleccionado ? "Dejar sin membresía (Inactivo)" : "Cancelar"}
           </button>
           <button
             type="button"
@@ -309,6 +346,58 @@ const FormularioSuscripcionModal = ({
           </div>
         )}
 
+        {/* RESUMEN DEL SOCIO SELECCIONADO / RECIÉN REGISTRADO */}
+        {socioActualObj && (
+          <div
+            style={{
+              background: "var(--bg-surface-elevated)",
+              border: "1px solid var(--border-light)",
+              borderRadius: "var(--radius-md)",
+              padding: "14px 16px",
+              marginBottom: "16px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Datos del Socio
+              </div>
+              <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)", marginTop: "2px" }}>
+                {socioActualObj.nombre} {socioActualObj.apellido || ""}
+              </div>
+              <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "4px" }}>
+                <span>DNI: <strong>{socioActualObj.dni}</strong></span>
+                {socioActualObj.telefono && <span>Tel: {socioActualObj.telefono}</span>}
+                {socioActualObj.correo && <span>{socioActualObj.correo}</span>}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+              <span
+                className={`badge ${socioActualObj.activo ? "badge-success" : "badge-warning"}`}
+                style={{ fontSize: "11.5px" }}
+              >
+                {socioActualObj.activo ? "Socio Activo" : "Inactivo · Se activará al cobrar"}
+              </span>
+
+              {onSwitchToPaseDiario && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: "11.5px", padding: "4px 10px" }}
+                  onClick={() => onSwitchToPaseDiario(socioActualObj)}
+                >
+                  ¿Solo desea Pase Diario por 1 día?
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="form-group">
           <label className="form-label">Socio Beneficiario *</label>
           <select
@@ -322,7 +411,7 @@ const FormularioSuscripcionModal = ({
             <option value="">-- Seleccionar socio --</option>
             {socios.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.nombre} {s.apellido} (DNI: {s.dni})
+                {s.nombre} {s.apellido || ""} (DNI: {s.dni}) — {s.activo ? "Activo" : "Inactivo"}
               </option>
             ))}
           </select>

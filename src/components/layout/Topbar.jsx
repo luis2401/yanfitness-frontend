@@ -20,7 +20,7 @@ const Topbar = ({
   kpis,
   onNavigateToTab,
 }) => {
-  const { usuario, isAdmin, logout, sedeTurno, setSedeTurno, sedesList, showToast } = useAuth();
+  const { usuario, isAdmin, isRolGlobal, logout, sedeTurno, setSedeTurno, sedesList, showToast } = useAuth();
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -81,7 +81,7 @@ const Topbar = ({
         <div className="topbar-title-block">
           <h1>{currentInfo.title}</h1>
           <div className="topbar-breadcrumb">
-            <span>Yanahuara Fitness</span>
+            <span>YanFitness</span>
             <span>·</span>
             <span>{currentInfo.subtitle}</span>
           </div>
@@ -89,8 +89,8 @@ const Topbar = ({
       </div>
 
       <div className="topbar-right">
-        {/* SEDE DE TURNO SELECTOR */}
-        {sedesList?.length > 0 && (
+        {/* SEDE ACTIVA SELECTOR: VISIBLE PARA TODOS LOS ROLES EXCEPTO ADMINISTRADOR Y SUPERVISOR */}
+        {!isRolGlobal && sedesList?.length > 0 && (
           <div
             style={{
               display: "flex",

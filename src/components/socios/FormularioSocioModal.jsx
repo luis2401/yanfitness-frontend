@@ -66,8 +66,16 @@ const FormularioSocioModal = ({
       } else if (val.length < 2) {
         error = "El nombre debe tener al menos 2 caracteres.";
       }
+    } else if (name === "apellido") {
+      if (!val) {
+        error = "El apellido es obligatorio.";
+      } else if (val.length < 2) {
+        error = "El apellido debe tener al menos 2 caracteres.";
+      }
     } else if (name === "telefono") {
-      if (val && !/^\d{9}$/.test(val)) {
+      if (!val) {
+        error = "El teléfono de contacto es obligatorio (9 dígitos).";
+      } else if (!/^\d{9}$/.test(val)) {
         error = "El teléfono debe tener exactamente 9 dígitos numéricos (ej. 987654321).";
       }
     } else if (name === "correo") {
@@ -128,7 +136,15 @@ const FormularioSocioModal = ({
       errors.nombre = "El nombre debe tener al menos 2 caracteres.";
     }
 
-    if (form.telefono && !/^\d{9}$/.test(form.telefono.trim())) {
+    if (!form.apellido.trim()) {
+      errors.apellido = "El apellido es obligatorio.";
+    } else if (form.apellido.trim().length < 2) {
+      errors.apellido = "El apellido debe tener al menos 2 caracteres.";
+    }
+
+    if (!form.telefono.trim()) {
+      errors.telefono = "El teléfono es obligatorio (9 dígitos).";
+    } else if (!/^\d{9}$/.test(form.telefono.trim())) {
       errors.telefono = "El teléfono debe tener exactamente 9 dígitos numéricos.";
     }
 
@@ -154,24 +170,24 @@ const FormularioSocioModal = ({
 
     try {
       if (socioAEditar) {
-        // Backend Update: PUT /gimnasio/{id} takes { correo, telefono }
         const actualizado = await sociosService.actualizar(socioAEditar.id, {
+          nombre: form.nombre.trim(),
+          apellido: form.apellido.trim(),
           correo: form.correo?.trim() || null,
-          telefono: form.telefono?.trim() || null,
+          telefono: form.telefono.trim(),
         });
         showToast("Socio actualizado exitosamente", "success");
         onSuccess(actualizado);
       } else {
-        // Backend Create: POST /gimnasio takes { dni, nombre, apellido, telefono, correo, activo }
         const nuevo = await sociosService.crear({
           dni: form.dni.trim(),
           nombre: form.nombre.trim(),
-          apellido: form.apellido?.trim() || null,
-          telefono: form.telefono?.trim() || null,
+          apellido: form.apellido.trim(),
+          telefono: form.telefono.trim(),
           correo: form.correo?.trim() || null,
           activo: form.activo,
         });
-        showToast("Socio registrado exitosamente", "success");
+        showToast("Socio registrado. Selecciona su membresía o pase diario para activarlo.", "success");
         onSuccess(nuevo);
       }
     } catch (err) {
@@ -202,7 +218,7 @@ const FormularioSocioModal = ({
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading ? "Guardando..." : socioAEditar ? "Guardar Cambios" : "Registrar Socio"}
+            {loading ? "Guardando..." : socioAEditar ? "Guardar Cambios" : "Registrar y Continuar a Venta"}
           </button>
         </>
       }
@@ -238,15 +254,15 @@ const FormularioSocioModal = ({
               placeholder="12345678"
               className={`form-control ${fieldErrors.dni ? "is-invalid" : ""}`}
               required
-              disabled={Boolean(socioAEditar)} // DNI no editable
+              disabled={Boolean(socioAEditar)}
             />
             {fieldErrors.dni && (
-              <span className="field-error-text">⚠️ {fieldErrors.dni}</span>
+              <span className="field-error-text">{fieldErrors.dni}</span>
             )}
           </div>
 
           <div className="form-group">
-            <label className="form-label">Teléfono (9 dígitos)</label>
+            <label className="form-label">Teléfono (9 dígitos) *</label>
             <input
               type="tel"
               name="telefono"
@@ -256,9 +272,10 @@ const FormularioSocioModal = ({
               maxLength={9}
               placeholder="987654321"
               className={`form-control ${fieldErrors.telefono ? "is-invalid" : ""}`}
+              required
             />
             {fieldErrors.telefono && (
-              <span className="field-error-text">⚠️ {fieldErrors.telefono}</span>
+              <span className="field-error-text">{fieldErrors.telefono}</span>
             )}
           </div>
         </div>
@@ -275,29 +292,32 @@ const FormularioSocioModal = ({
               placeholder="Ej. Carlos"
               className={`form-control ${fieldErrors.nombre ? "is-invalid" : ""}`}
               required
-              disabled={Boolean(socioAEditar)}
             />
             {fieldErrors.nombre && (
-              <span className="field-error-text">⚠️ {fieldErrors.nombre}</span>
+              <span className="field-error-text">{fieldErrors.nombre}</span>
             )}
           </div>
 
           <div className="form-group">
-            <label className="form-label">Apellidos</label>
+            <label className="form-label">Apellidos *</label>
             <input
               type="text"
               name="apellido"
               value={form.apellido}
               onChange={handleChange}
+              onBlur={handleBlur}
               placeholder="Ej. Morales Pérez"
-              className="form-control"
-              disabled={Boolean(socioAEditar)}
+              className={`form-control ${fieldErrors.apellido ? "is-invalid" : ""}`}
+              required
             />
+            {fieldErrors.apellido && (
+              <span className="field-error-text">{fieldErrors.apellido}</span>
+            )}
           </div>
         </div>
 
         <div className="form-group">
-          <label className="form-label">Correo Electrónico</label>
+          <label className="form-label">Correo Electrónico (Opcional)</label>
           <input
             type="email"
             name="correo"
@@ -308,7 +328,7 @@ const FormularioSocioModal = ({
             className={`form-control ${fieldErrors.correo ? "is-invalid" : ""}`}
           />
           {fieldErrors.correo && (
-            <span className="field-error-text">⚠️ {fieldErrors.correo}</span>
+            <span className="field-error-text">{fieldErrors.correo}</span>
           )}
         </div>
       </form>

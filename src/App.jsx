@@ -160,6 +160,11 @@ function AppContent() {
             setQuickSubModal(false);
             cambiarPantalla("suscripciones");
           }}
+          onSwitchToPaseDiario={(socioObj) => {
+            setQuickSubModal(false);
+            setNuevoSocioCreado(socioObj);
+            setQuickPaseModal(true);
+          }}
         />
       )}
 
@@ -167,9 +172,14 @@ function AppContent() {
       {quickPaseModal && (
         <FormularioPaseDiarioModal
           isOpen={quickPaseModal}
-          onClose={() => setQuickPaseModal(false)}
+          socioPreseleccionado={nuevoSocioCreado}
+          onClose={() => {
+            setQuickPaseModal(false);
+            setNuevoSocioCreado(null);
+          }}
           onSuccess={() => {
             setQuickPaseModal(false);
+            setNuevoSocioCreado(null);
             cambiarPantalla("caja");
           }}
         />

@@ -102,13 +102,21 @@ const Planes = () => {
         });
         showToast("Plan actualizado exitosamente", "success");
       } else {
+        const precioDefecto = dias <= 35 ? 120.0 : dias <= 100 ? 320.0 : 1000.0;
+        const preciosSedesIniciales = (sedes || []).map((s) => ({
+          sedeId: Number(s.id),
+          precioActual: precioDefecto,
+          recargoMultisede: 20.0,
+          activo: true,
+        }));
         await planesService.crear({
           nombre: formPlan.nombre.trim(),
           duracionDias: dias,
           activo: formPlan.activo,
           condiciones: formPlan.condiciones?.trim() || null,
+          preciosSedes: preciosSedesIniciales.length > 0 ? preciosSedesIniciales : undefined,
         });
-        showToast("Plan creado exitosamente", "success");
+        showToast("Plan creado y habilitado en las sedes activas", "success");
       }
       setModalPlanOpen(false);
       cargarDatos();

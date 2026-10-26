@@ -27,12 +27,34 @@ import {
 } from "lucide-react";
 
 const ROLES_DISPONIBLES = [
-  { id: 1, nombre: "ADMINISTRADOR", desc: "Acceso total a todos los módulos y sedes" },
-  { id: 2, nombre: "SUPERVISOR", desc: "Supervisión operativa y reportes" },
-  { id: 3, nombre: "INSTRUCTOR", desc: "Coach deportivo, rutinas y dictado de clases" },
-  { id: 4, nombre: "RECEPCIONISTA", desc: "Atención, registro de socios y cobro en caja" },
-  { id: 5, nombre: "EMPLEADO", desc: "Personal administrativo general" },
+  { id: 1, nombre: "ADMINISTRADOR", desc: "Acceso global a todos los módulos y sedes" },
+  { id: 2, nombre: "SUPERVISOR", desc: "Supervisión global operativa y reportes" },
+  { id: 3, nombre: "INSTRUCTOR", desc: "Entrenador, rutinas y dictado de clases (Asignable a sede)" },
+  { id: 4, nombre: "RECEPCIONISTA", desc: "Atención, registro de socios y caja (Asignable a sede)" },
 ];
+
+const getLocalToday = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+
+const obtenerRolEmpleado = (emp) => {
+  if (!emp) return "INSTRUCTOR";
+  const codigo =
+    emp.rolCodigo ||
+    emp.rolNombre ||
+    emp.rol?.codigo ||
+    emp.rol?.nombre ||
+    ROLES_DISPONIBLES.find((r) => Number(r.id) === Number(emp.rolId))?.nombre ||
+    "INSTRUCTOR";
+  return String(codigo).toUpperCase().trim();
+};
+
+// Todos los roles MENOS Administrador y Supervisor pueden ser asignados a una sede
+const esRolAsignableASede = (emp) => {
+  const rol = obtenerRolEmpleado(emp);
+  return !["ADMINISTRADOR", "ADMIN", "SUPERVISOR"].includes(rol);
+};
 
 const Empleados = () => {
   const { isAdmin, showToast } = useAuth();
@@ -55,17 +77,18 @@ const Empleados = () => {
     dni: "",
     nombre: "",
     apellido: "",
-    rolId: 3, // default Coach / Instructor
+    rolId: 3,
     telefono: "",
     correo: "",
     direccion: "",
-    especialidad: "Entrenador Personal / Funcional",
+    especialidad: "Entrenamiento Funcional y Musculación",
   });
 
   // ASSIGNMENTS & ROTATION STATE
   const [asignaciones, setAsignaciones] = useState([]);
   const [filtroSedeAsignacion, setFiltroSedeAsignacion] = useState("");
   const [filtroEmpleadoAsignacion, setFiltroEmpleadoAsignacion] = useState("");
+  const [filtroEstadoAsignacion, setFiltroEstadoAsignacion] = useState("VIGENTES"); // "VIGENTES" | "HISTORIAL" | "TODAS"
   const [modalAsignacionOpen, setModalAsignacionOpen] = useState(false);
   const [savingAsignacion, setSavingAsignacion] = useState(false);
   const [errorAsignacion, setErrorAsignacion] = useState("");
@@ -73,7 +96,7 @@ const Empleados = () => {
   const [formAsignacion, setFormAsignacion] = useState({
     empleadoId: "",
     sedeId: "",
-    fechaDesde: new Date().toISOString().split("T")[0],
+    fechaDesde: getLocalToday(),
     fechaHasta: "",
   });
 
@@ -125,7 +148,7 @@ const Empleados = () => {
         telefono: "",
         correo: "",
         direccion: "",
-        especialidad: "Coach Deportivo / Musculación",
+        especialidad: "Musculación y Entrenamiento Funcional",
       });
     }
     setErrorMsg("");
@@ -207,12 +230,25 @@ const Empleados = () => {
     }
   };
 
+  // Empleados elegibles para ser asignados a una sede (Activos y rol != ADMINISTRADOR / SUPERVISOR)
+  const empleadosAsignables = empleados.filter((e) => e.activo && esRolAsignableASede(e));
+
   // OPEN MODAL ASIGNACION
   const handleOpenAsignacionModal = (empDefault = null) => {
+    if (empDefault && !esRolAsignableASede(empDefault)) {
+      showToast(
+        "Los roles Administrador y Supervisor tienen alcance global y no se asignan a una sede específica.",
+        "info"
+      );
+      return;
+    }
+    const defaultEmpId =
+      empDefault?.id || (empleadosAsignables[0]?.id ? String(empleadosAsignables[0].id) : "");
+
     setFormAsignacion({
-      empleadoId: empDefault?.id || (empleados[0]?.id ? String(empleados[0].id) : ""),
+      empleadoId: String(defaultEmpId),
       sedeId: sedes[0]?.id ? String(sedes[0].id) : "",
-      fechaDesde: new Date().toISOString().split("T")[0],
+      fechaDesde: getLocalToday(),
       fechaHasta: "",
     });
     setErrorAsignacion("");
@@ -232,6 +268,22 @@ const Empleados = () => {
       setErrorAsignacion("Debes seleccionar una sede.");
       return;
     }
+    if (
+      formAsignacion.fechaHasta &&
+      formAsignacion.fechaDesde &&
+      formAsignacion.fechaHasta < formAsignacion.fechaDesde
+    ) {
+      setErrorAsignacion("La fecha límite de rotación no puede ser anterior a la fecha de inicio.");
+      return;
+    }
+
+    const empObj = empleados.find((emp) => Number(emp.id) === Number(formAsignacion.empleadoId));
+    if (empObj && !esRolAsignableASede(empObj)) {
+      setErrorAsignacion(
+        "Los colaboradores con rol Administrador o Supervisor tienen alcance en todas las sedes y no requieren asignación por sede."
+      );
+      return;
+    }
 
     setSavingAsignacion(true);
     try {
@@ -244,6 +296,7 @@ const Empleados = () => {
 
       showToast("Asignación de sede registrada correctamente", "success");
       setModalAsignacionOpen(false);
+      setFiltroEstadoAsignacion("VIGENTES");
       cargarDatos();
     } catch (err) {
       setErrorAsignacion(err.message || "Error al asignar colaborador a la sede.");
@@ -252,14 +305,41 @@ const Empleados = () => {
     }
   };
 
-  // FINALIZAR ASIGNACION (TERMINAR ROTACION HOY)
-  const handleFinalizarAsignacion = async (id, nombre) => {
-    if (!window.confirm(`¿Finalizar la rotación de ${nombre} en esta sede a partir de hoy?`)) return;
+  // Determinar estado real de una asignación
+  const evaluarEstadoAsignacion = (asig) => {
+    const todayStr = getLocalToday();
+    const esAnulada = Boolean(asig.anulada);
+    const tieneFechaFin = Boolean(asig.fechaHasta);
+    // Si tiene fechaHasta menor o igual a hoy, la asignación ya concluyó (ej. al darle a Finalizar Hoy)
+    const esFinalizada = !esAnulada && tieneFechaFin && asig.fechaHasta <= todayStr;
+    const esVigente = !esAnulada && !esFinalizada;
+    return { esAnulada, tieneFechaFin, esFinalizada, esVigente };
+  };
+
+  // FINALIZAR ASIGNACION (TERMINAR ASIGNACION HOY)
+  const handleFinalizarAsignacion = async (asig) => {
+    const nombre = asig.empleadoNombre || `Colaborador #${asig.empleadoId}`;
+    if (!window.confirm(`¿Dar por finalizada la asignación de ${nombre} en ${asig.sedeNombre || "esta sede"}?`)) {
+      return;
+    }
     try {
-      await asignacionesService.finalizar(id, {
-        fechaHasta: new Date().toISOString().split("T")[0],
+      const todayStr = getLocalToday();
+      // Si la fecha de inicio era posterior a hoy, usamos fechaDesde para cumplir fechaHasta >= fechaDesde
+      const fechaFinEfectiva =
+        asig.fechaDesde && asig.fechaDesde > todayStr ? asig.fechaDesde : todayStr;
+
+      await asignacionesService.finalizar(asig.id, {
+        fechaHasta: fechaFinEfectiva,
       });
-      showToast("Rotación finalizada con éxito", "success");
+
+      // Actualización inmediata en memoria para reflejar el cambio al instante
+      setAsignaciones((prev) =>
+        prev.map((item) =>
+          item.id === asig.id ? { ...item, fechaHasta: fechaFinEfectiva } : item
+        )
+      );
+
+      showToast("Asignación finalizada correctamente", "success");
       cargarDatos();
     } catch (err) {
       showToast(err.message || "Error al finalizar asignación", "error");
@@ -271,6 +351,9 @@ const Empleados = () => {
     if (!window.confirm("¿Estás seguro de anular esta asignación? Esta acción es irreversible.")) return;
     try {
       await asignacionesService.anular(id);
+      setAsignaciones((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, anulada: true } : item))
+      );
       showToast("Asignación anulada", "success");
       cargarDatos();
     } catch (err) {
@@ -286,15 +369,26 @@ const Empleados = () => {
       emp.dni?.includes(term) ||
       emp.nombre?.toLowerCase().includes(term) ||
       emp.apellido?.toLowerCase().includes(term) ||
-      emp.especialidad?.toLowerCase().includes(term)
+      emp.especialidad?.toLowerCase().includes(term) ||
+      obtenerRolEmpleado(emp).toLowerCase().includes(term)
     );
   });
+
+  const totalVigentes = asignaciones.filter((a) => evaluarEstadoAsignacion(a).esVigente).length;
+  const totalHistorial = asignaciones.filter((a) => !evaluarEstadoAsignacion(a).esVigente).length;
 
   const asignacionesFiltradas = asignaciones.filter((asig) => {
     if (filtroSedeAsignacion && String(asig.sedeId) !== String(filtroSedeAsignacion)) {
       return false;
     }
     if (filtroEmpleadoAsignacion && String(asig.empleadoId) !== String(filtroEmpleadoAsignacion)) {
+      return false;
+    }
+    const { esVigente } = evaluarEstadoAsignacion(asig);
+    if (filtroEstadoAsignacion === "VIGENTES" && !esVigente) {
+      return false;
+    }
+    if (filtroEstadoAsignacion === "HISTORIAL" && esVigente) {
       return false;
     }
     return true;
@@ -363,7 +457,7 @@ const Empleados = () => {
           onClick={() => setActiveSubTab("asignaciones")}
         >
           <Building2 size={15} />
-          Asignaciones y Rotaciones de Sede ({asignaciones.length})
+          Asignaciones de Sede ({totalVigentes} vigentes)
         </button>
       </div>
 
@@ -387,7 +481,7 @@ const Empleados = () => {
               <Search size={18} className="search-icon" />
               <input
                 type="text"
-                placeholder="Buscar por DNI, nombre o especialidad..."
+                placeholder="Buscar por DNI, nombre, rol o especialidad..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -441,11 +535,8 @@ const Empleados = () => {
                   </thead>
                   <tbody>
                     {empleadosFiltrados.map((emp) => {
-                      const rolNombre =
-                        emp.rolNombre ||
-                        emp.rol?.nombre ||
-                        ROLES_DISPONIBLES.find((r) => r.id === Number(emp.rolId))?.nombre ||
-                        "INSTRUCTOR";
+                      const rolNombre = obtenerRolEmpleado(emp);
+                      const puedeAsignarSede = esRolAsignableASede(emp);
                       return (
                         <tr key={emp.id}>
                           <td>
@@ -455,21 +546,21 @@ const Empleados = () => {
                                   width: "38px",
                                   height: "38px",
                                   borderRadius: "var(--radius-md)",
-                                  background: "rgba(16, 185, 129, 0.15)",
+                                  background: "var(--color-brand-muted)",
                                   color: "var(--color-brand-primary)",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  fontWeight: 700,
-                                  fontSize: "14px",
-                                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                                  fontWeight: 600,
+                                  fontSize: "13px",
+                                  border: "1px solid rgba(16, 185, 129, 0.25)",
                                 }}
                               >
                                 {emp.nombre?.charAt(0)}
                                 {emp.apellido?.charAt(0)}
                               </div>
                               <div>
-                                <strong style={{ color: "var(--text-main)", fontSize: "14px" }}>
+                                <strong style={{ color: "var(--text-main)", fontSize: "14px", fontWeight: 600 }}>
                                   {emp.nombre} {emp.apellido}
                                 </strong>
                                 <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
@@ -482,19 +573,28 @@ const Empleados = () => {
                             <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{emp.dni}</span>
                           </td>
                           <td>
-                            <Badge
-                              variant={
-                                rolNombre === "ADMINISTRADOR"
-                                  ? "purple"
-                                  : rolNombre === "INSTRUCTOR"
-                                  ? "success"
-                                  : rolNombre === "RECEPCIONISTA"
-                                  ? "blue"
-                                  : "neutral"
-                              }
-                            >
-                              {rolNombre}
-                            </Badge>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                              <Badge
+                                variant={
+                                  rolNombre === "ADMINISTRADOR" || rolNombre === "ADMIN"
+                                    ? "purple"
+                                    : rolNombre === "SUPERVISOR"
+                                    ? "warning"
+                                    : rolNombre === "INSTRUCTOR"
+                                    ? "success"
+                                    : rolNombre === "RECEPCIONISTA"
+                                    ? "blue"
+                                    : "neutral"
+                                }
+                              >
+                                {rolNombre}
+                              </Badge>
+                              {!puedeAsignarSede && (
+                                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                                  Acceso global (todas las sedes)
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
@@ -523,15 +623,17 @@ const Empleados = () => {
                           {isAdmin && (
                             <td style={{ textAlign: "right" }}>
                               <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
-                                <button
-                                  type="button"
-                                  className="btn-icon"
-                                  onClick={() => handleOpenAsignacionModal(emp)}
-                                  title="Asignar o rotar de sede"
-                                  style={{ color: "var(--color-accent)" }}
-                                >
-                                  <MapPin size={16} />
-                                </button>
+                                {puedeAsignarSede && (
+                                  <button
+                                    type="button"
+                                    className="btn-icon"
+                                    onClick={() => handleOpenAsignacionModal(emp)}
+                                    title="Asignar o rotar de sede"
+                                    style={{ color: "var(--color-accent)" }}
+                                  >
+                                    <MapPin size={16} />
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   className="btn-icon"
@@ -574,11 +676,11 @@ const Empleados = () => {
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                 <Building2 size={18} style={{ color: "var(--color-brand-primary)" }} />
                 <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: "var(--text-main)" }}>
-                  Rotación y desplazamiento de personal entre sedes
+                  Rotación y desplazamiento de personal operativo entre sedes
                 </h3>
               </div>
               <p className="prose-limit" style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
-                Un colaborador puede trabajar en una sede fija o ser asignado temporalmente a otra sede para cubrir turnos, vacaciones o dictar clases especiales.
+                Se puede asignar sede fija o rotación temporal a todo el personal operativo (Recepcionistas, Instructores, etc.), excepto Administradores y Supervisores que cuentan con alcance global.
               </p>
             </div>
             {isAdmin && (
@@ -600,69 +702,105 @@ const Empleados = () => {
               gap: "14px",
               marginBottom: "20px",
               flexWrap: "wrap",
-              alignItems: "center",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
             }}
           >
-            <div style={{ minWidth: "200px" }}>
-              <label style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
-                Filtrar por Sede:
-              </label>
-              <select
-                className="form-control"
-                value={filtroSedeAsignacion}
-                onChange={(e) => setFiltroSedeAsignacion(e.target.value)}
-              >
-                <option value="">Todas las sedes</option>
-                {sedes.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ minWidth: "200px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                  Filtrar por Sede:
+                </label>
+                <select
+                  className="form-control"
+                  value={filtroSedeAsignacion}
+                  onChange={(e) => setFiltroSedeAsignacion(e.target.value)}
+                >
+                  <option value="">Todas las sedes</option>
+                  {sedes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div style={{ minWidth: "220px" }}>
-              <label style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
-                Filtrar por Colaborador:
-              </label>
-              <select
-                className="form-control"
-                value={filtroEmpleadoAsignacion}
-                onChange={(e) => setFiltroEmpleadoAsignacion(e.target.value)}
-              >
-                <option value="">Todos los colaboradores</option>
-                {empleados.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.nombre} {e.apellido} ({e.dni})
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div style={{ minWidth: "240px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                  Filtrar por Colaborador:
+                </label>
+                <select
+                  className="form-control"
+                  value={filtroEmpleadoAsignacion}
+                  onChange={(e) => setFiltroEmpleadoAsignacion(e.target.value)}
+                >
+                  <option value="">Todos los colaboradores asignables</option>
+                  {empleados
+                    .filter((e) => esRolAsignableASede(e))
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre} {e.apellido} ({obtenerRolEmpleado(e)})
+                      </option>
+                    ))}
+                </select>
+              </div>
 
-            {(filtroSedeAsignacion || filtroEmpleadoAsignacion) && (
-              <div style={{ alignSelf: "flex-end" }}>
+              {(filtroSedeAsignacion || filtroEmpleadoAsignacion || filtroEstadoAsignacion !== "VIGENTES") && (
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={() => {
                     setFiltroSedeAsignacion("");
                     setFiltroEmpleadoAsignacion("");
+                    setFiltroEstadoAsignacion("VIGENTES");
                   }}
                 >
-                  Limpiar filtros
+                  Restablecer filtros
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+
+            <div className="nav-pills" style={{ margin: 0 }}>
+              <button
+                type="button"
+                className={`nav-pill ${filtroEstadoAsignacion === "VIGENTES" ? "active" : ""}`}
+                onClick={() => setFiltroEstadoAsignacion("VIGENTES")}
+              >
+                Vigentes ({totalVigentes})
+              </button>
+              <button
+                type="button"
+                className={`nav-pill ${filtroEstadoAsignacion === "HISTORIAL" ? "active" : ""}`}
+                onClick={() => setFiltroEstadoAsignacion("HISTORIAL")}
+              >
+                Finalizadas / Anuladas ({totalHistorial})
+              </button>
+              <button
+                type="button"
+                className={`nav-pill ${filtroEstadoAsignacion === "TODAS" ? "active" : ""}`}
+                onClick={() => setFiltroEstadoAsignacion("TODAS")}
+              >
+                Todas ({asignaciones.length})
+              </button>
+            </div>
           </div>
 
           {/* ASSIGNMENTS LIST */}
           {loading ? (
-            <LoadingSpinner text="Cargando historial de asignaciones..." />
+            <LoadingSpinner text="Cargando asignaciones de sede..." />
           ) : asignacionesFiltradas.length === 0 ? (
             <EmptyState
-              title="No hay asignaciones registradas"
-              description="Actualmente no hay colaboradores asignados bajo los filtros seleccionados."
-              actionLabel={isAdmin ? "Crear Primera Asignación" : null}
+              title={
+                filtroEstadoAsignacion === "VIGENTES"
+                  ? "No hay asignaciones vigentes"
+                  : "No se encontraron asignaciones"
+              }
+              description={
+                filtroEstadoAsignacion === "VIGENTES" && totalHistorial > 0
+                  ? `No hay asignaciones activas con estos filtros. Tienes ${totalHistorial} registro(s) en la vista de "Finalizadas / Anuladas".`
+                  : "Actualmente no hay colaboradores asignados bajo los filtros seleccionados."
+              }
+              actionLabel={isAdmin ? "Nueva Asignación de Sede" : null}
               onAction={() => handleOpenAsignacionModal(null)}
             />
           ) : (
@@ -671,33 +809,39 @@ const Empleados = () => {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th style={{ minWidth: "200px" }}>Colaborador</th>
+                      <th style={{ minWidth: "210px" }}>Colaborador</th>
                       <th style={{ minWidth: "180px" }}>Sede de Trabajo</th>
                       <th style={{ minWidth: "130px" }}>Fecha de Inicio</th>
-                      <th style={{ minWidth: "150px" }}>Fecha Límite</th>
-                      <th style={{ minWidth: "150px" }}>Tipo de Modalidad</th>
+                      <th style={{ minWidth: "150px" }}>Fecha de Cierre</th>
+                      <th style={{ minWidth: "150px" }}>Modalidad</th>
                       <th style={{ minWidth: "130px" }}>Estado</th>
-                      {isAdmin && <th style={{ minWidth: "180px", textAlign: "right" }}>Gestión</th>}
+                      {isAdmin && <th style={{ minWidth: "190px", textAlign: "right" }}>Gestión</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {asignacionesFiltradas.map((asig) => {
-                      const todayStr = new Date().toISOString().split("T")[0];
-                      const esAnulada = asig.anulada;
-                      const esTemporal = Boolean(asig.fechaHasta);
-                      const esFinalizada = esTemporal && asig.fechaHasta < todayStr;
-                      const esVigente = !esAnulada && !esFinalizada;
+                      const { esAnulada, tieneFechaFin, esFinalizada, esProgramada, esVigente } =
+                        evaluarEstadoAsignacion(asig);
+                      const empObj = empleados.find((e) => Number(e.id) === Number(asig.empleadoId));
+                      const rolEmp = empObj ? obtenerRolEmpleado(empObj) : null;
 
                       return (
-                        <tr key={asig.id}>
+                        <tr key={asig.id} style={{ opacity: esFinalizada || esAnulada ? 0.72 : 1 }}>
                           <td>
-                            <strong style={{ color: "var(--text-main)" }}>
-                              {asig.empleadoNombre || `Colaborador #${asig.empleadoId}`}
-                            </strong>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <strong style={{ color: "var(--text-main)", fontWeight: 600 }}>
+                                {asig.empleadoNombre || (empObj ? `${empObj.nombre} ${empObj.apellido}` : `Colaborador #${asig.empleadoId}`)}
+                              </strong>
+                              {rolEmp && (
+                                <span style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                                  {rolEmp}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <Building2 size={16} style={{ color: "var(--color-brand-primary)" }} />
+                              <Building2 size={15} style={{ color: "var(--color-brand-primary)" }} />
                               <span style={{ fontWeight: 600 }}>{asig.sedeNombre || `Sede #${asig.sedeId}`}</span>
                             </div>
                           </td>
@@ -709,20 +853,29 @@ const Empleados = () => {
                           </td>
                           <td>
                             <div style={{ fontSize: "13px" }}>
-                              {asig.fechaHasta ? (
-                                <span style={{ color: esFinalizada ? "var(--text-muted)" : "var(--color-energy)" }}>
+                              {tieneFechaFin ? (
+                                <span
+                                  style={{
+                                    color: esFinalizada ? "var(--text-muted)" : "var(--color-warning)",
+                                    fontWeight: 500,
+                                  }}
+                                >
                                   {asig.fechaHasta}
                                 </span>
                               ) : (
-                                <span style={{ color: "var(--color-success)", fontWeight: 600 }}>
+                                <span style={{ color: "var(--color-success)", fontWeight: 500 }}>
                                   Indefinida (Sede Fija)
                                 </span>
                               )}
                             </div>
                           </td>
                           <td>
-                            <Badge variant={esTemporal ? "info" : "purple"}>
-                              {esTemporal ? "Rotación Temporal" : "Sede Principal"}
+                            <Badge variant={tieneFechaFin ? "info" : "purple"}>
+                              {esFinalizada
+                                ? "Ciclo Cerrado"
+                                : tieneFechaFin
+                                ? "Rotación Temporal"
+                                : "Sede Principal"}
                             </Badge>
                           </td>
                           <td>
@@ -730,31 +883,37 @@ const Empleados = () => {
                               <Badge variant="danger">Anulada</Badge>
                             ) : esFinalizada ? (
                               <Badge variant="neutral">Finalizada</Badge>
+                            ) : esProgramada ? (
+                              <Badge variant="info">Programada</Badge>
                             ) : (
-                              <Badge variant="success">Vigente Activa</Badge>
+                              <Badge variant="success">Vigente</Badge>
                             )}
                           </td>
                           {isAdmin && (
                             <td style={{ textAlign: "right" }}>
-                              {!esAnulada && esVigente && (
+                              {esVigente ? (
                                 <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                                   <button
                                     type="button"
                                     className="btn btn-secondary btn-sm"
-                                    onClick={() => handleFinalizarAsignacion(asig.id, asig.empleadoNombre)}
-                                    title="Dar por terminada esta rotación hoy"
+                                    onClick={() => handleFinalizarAsignacion(asig)}
+                                    title="Dar por terminada esta asignación hoy"
                                   >
-                                    Finalizar Hoy
+                                    Finalizar
                                   </button>
                                   <button
                                     type="button"
                                     className="btn btn-danger btn-sm"
                                     onClick={() => handleAnularAsignacion(asig.id)}
-                                    title="Anular asignación"
+                                    title="Anular registro de asignación"
                                   >
                                     Anular
                                   </button>
                                 </div>
+                              ) : (
+                                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                                  {esAnulada ? "Registro anulado" : `Cerrada (${asig.fechaHasta})`}
+                                </span>
                               )}
                             </td>
                           )}
@@ -944,13 +1103,13 @@ const Empleados = () => {
         <div className="prose-limit" style={{ background: "var(--bg-surface-elevated)", padding: "12px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", marginBottom: "16px", fontSize: "13px" }}>
           <strong style={{ color: "var(--text-main)", fontWeight: 600 }}>Modalidad de asignación</strong>
           <p style={{ margin: "4px 0 0 0", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            Si dejas la <strong>Fecha Límite en blanco</strong>, el colaborador queda asignado de forma fija a esa sede. Si estableces una fecha fin, actuará como una rotación temporal para cubrir turnos específicos.
+            Si dejas la <strong>Fecha Límite en blanco</strong>, el colaborador queda asignado de forma fija a esa sede. Si estableces una fecha fin, actuará como una rotación temporal. (Se incluyen todos los roles operativos excepto Administrador y Supervisor).
           </p>
         </div>
 
         <form onSubmit={handleSaveAsignacion}>
           <div className="form-group">
-            <label className="form-label">Colaborador / Coach *</label>
+            <label className="form-label">Colaborador Operativo *</label>
             <select
               className="form-control"
               required
@@ -958,13 +1117,11 @@ const Empleados = () => {
               onChange={(e) => setFormAsignacion({ ...formAsignacion, empleadoId: e.target.value })}
             >
               <option value="">-- Selecciona un colaborador --</option>
-              {empleados
-                .filter((e) => e.activo)
-                .map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.nombre} {e.apellido} (DNI: {e.dni}) - {e.rol?.nombre || "Colaborador"}
-                  </option>
-                ))}
+              {empleadosAsignables.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nombre} {e.apellido} (DNI: {e.dni}) — {obtenerRolEmpleado(e)}
+                </option>
+              ))}
             </select>
           </div>
 

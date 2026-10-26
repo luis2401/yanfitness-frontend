@@ -48,7 +48,12 @@ export const AuthProvider = ({ children }) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Fetch available branches and assign default shift branch
+  const rolNormalizado = usuario?.rol?.toUpperCase() || "";
+  const isAdmin = ["ADMIN", "ADMINISTRADOR"].includes(rolNormalizado);
+  const isSupervisor = rolNormalizado === "SUPERVISOR";
+  const isRolGlobal = isAdmin || isSupervisor;
+
+  // Fetch available branches and assign default shift branch only for operational roles (not Admin/Supervisor)
   useEffect(() => {
     if (usuario) {
       sedesService
@@ -57,20 +62,26 @@ export const AuthProvider = ({ children }) => {
           const lista = Array.isArray(sedes) ? sedes : [];
           setSedesList(lista);
 
+          if (isRolGlobal) {
+            // Administradores y Supervisores gestionan todas las sedes sin estar atados a una sede de turno
+            localStorage.removeItem("yanfitness_sede_turno");
+            setSedeTurnoState(null);
+            return;
+          }
+
           if (lista.length > 0) {
-            // Check if there is already a saved sedeTurno that is still valid
             setSedeTurnoState((current) => {
               if (current && lista.some((s) => s.id === current.id)) {
                 return current;
               }
-              // If user has an active assignment, use that sede
               if (usuario.empleadoId) {
                 asignacionesService
                   .listar({ empleadoId: usuario.empleadoId })
                   .then((asigs) => {
-                    const todayStr = new Date().toISOString().split("T")[0];
+                    const now = new Date();
+                    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
                     const activa = asigs?.find(
-                      (a) => !a.anulada && (!a.fechaHasta || a.fechaHasta >= todayStr)
+                      (a) => !a.anulada && (!a.fechaHasta || a.fechaHasta > todayStr)
                     );
                     if (activa) {
                       const matched = lista.find((s) => s.id === activa.sedeId);
@@ -87,7 +98,6 @@ export const AuthProvider = ({ children }) => {
                 return current || lista[0];
               }
 
-              // Default to first active branch
               localStorage.setItem("yanfitness_sede_turno", JSON.stringify(lista[0]));
               return lista[0];
             });
@@ -95,7 +105,7 @@ export const AuthProvider = ({ children }) => {
         })
         .catch(() => {});
     }
-  }, [usuario, setSedeTurno]);
+  }, [usuario, isRolGlobal, setSedeTurno]);
 
   const logout = useCallback(async () => {
     try {
@@ -134,17 +144,16 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem("yanfitness_usuario");
       localStorage.setItem("yanfitness_token", userData.token);
     }
-    showToast(`¡Bienvenido de vuelta, ${userData.username}!`, "success");
+    showToast(`Bienvenido, ${userData.username}`, "success");
   };
-
-  const rolNormalizado = usuario?.rol?.toUpperCase() || "";
-  const isAdmin = ["ADMIN", "ADMINISTRADOR"].includes(rolNormalizado);
 
   return (
     <AuthContext.Provider
       value={{
         usuario,
         isAdmin,
+        isSupervisor,
+        isRolGlobal,
         sedeTurno,
         setSedeTurno,
         sedesList,

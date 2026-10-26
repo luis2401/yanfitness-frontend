@@ -140,12 +140,16 @@ const Clases = () => {
       setErrorClase("El cupo máximo debe ser un número mayor a 0.");
       return;
     }
+    if (formClase.horaInicio && formClase.horaFin && formClase.horaFin <= formClase.horaInicio) {
+      setErrorClase("La hora de fin debe ser posterior a la hora de inicio.");
+      return;
+    }
 
     setSavingClase(true);
     try {
       if (claseAEditar) {
         await clasesService.actualizar(claseAEditar.id, {
-          nombre: formClase.nombre,
+          nombre: formClase.nombre.trim(),
           diaSemana: Number(formClase.diaSemana),
           horaInicio: formClase.horaInicio,
           horaFin: formClase.horaFin,
@@ -156,7 +160,7 @@ const Clases = () => {
         showToast("Clase actualizada correctamente", "success");
       } else {
         await clasesService.crear({
-          nombre: formClase.nombre,
+          nombre: formClase.nombre.trim(),
           diaSemana: Number(formClase.diaSemana),
           horaInicio: formClase.horaInicio,
           horaFin: formClase.horaFin,
@@ -190,8 +194,11 @@ const Clases = () => {
     setClaseParaInscribir(clase);
     try {
       const sociosData = await sociosService.listar();
-      setSocios(sociosData || []);
-      setSocioSeleccionado(sociosData?.[0]?.id || "");
+      const lista = Array.isArray(sociosData) ? sociosData : sociosData?.content || [];
+      const activos = lista.filter((s) => s.activo);
+      const mostrar = activos.length > 0 ? activos : lista;
+      setSocios(mostrar);
+      setSocioSeleccionado(mostrar?.[0]?.id || "");
     } catch {
       setSocios([]);
     }
@@ -224,7 +231,7 @@ const Clases = () => {
     setModalAsistenciaOpen(true);
     try {
       const data = await clasesService.obtenerInscripciones(clase.id, true);
-      setInscritosClase(data || []);
+      setInscritosClase(Array.isArray(data) ? data : []);
     } catch {
       setInscritosClase([]);
     } finally {
@@ -234,9 +241,13 @@ const Clases = () => {
 
   const handleRegistrarAsistencia = async (inscripcionId, estado) => {
     try {
+      const d = new Date();
+      const localToday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate()
+      ).padStart(2, "0")}`;
       await inscripcionesService.registrarAsistencia({
         socioClaseId: inscripcionId,
-        fecha: new Date().toISOString().split("T")[0],
+        fecha: localToday,
         estado,
         observacion: `Marcado desde panel por ${claseParaAsistencia?.nombre}`,
       });

@@ -7,6 +7,7 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 import FormularioSocioModal from "../components/socios/FormularioSocioModal";
 import DetalleSocioModal from "../components/socios/DetalleSocioModal";
 import FormularioSuscripcionModal from "../components/suscripciones/FormularioSuscripcionModal";
+import FormularioPaseDiarioModal from "../components/pagos/FormularioPaseDiarioModal";
 import {
   Users,
   UserPlus,
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 
 const Socios = () => {
-  const { usuario, isAdmin, showToast } = useAuth();
+  const { isAdmin, showToast } = useAuth();
   const [socios, setSocios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,6 +37,7 @@ const Socios = () => {
   const [socioSeleccionado, setSocioSeleccionado] = useState(null);
 
   const [modalSubOpen, setModalSubOpen] = useState(false);
+  const [modalPaseFromSocioOpen, setModalPaseFromSocioOpen] = useState(false);
   const [socioParaSub, setSocioParaSub] = useState(null);
 
   const cargarSocios = async () => {
@@ -395,7 +397,7 @@ const Socios = () => {
         />
       )}
 
-      {/* MODAL NUEVA SUSCRIPCIÓN */}
+      {/* MODAL NUEVA SUSCRIPCIÓN (SE ABRE AUTOMÁTICAMENTE AL REGISTRAR UN SOCIO) */}
       {modalSubOpen && (
         <FormularioSuscripcionModal
           isOpen={modalSubOpen}
@@ -403,6 +405,24 @@ const Socios = () => {
           onClose={() => setModalSubOpen(false)}
           onSuccess={() => {
             setModalSubOpen(false);
+            cargarSocios();
+          }}
+          onSwitchToPaseDiario={(socioObj) => {
+            setModalSubOpen(false);
+            setSocioParaSub(socioObj);
+            setModalPaseFromSocioOpen(true);
+          }}
+        />
+      )}
+
+      {/* MODAL PASE DIARIO PARA SOCIO RECIÉN REGISTRADO O SELECCIONADO */}
+      {modalPaseFromSocioOpen && (
+        <FormularioPaseDiarioModal
+          isOpen={modalPaseFromSocioOpen}
+          socioPreseleccionado={socioParaSub}
+          onClose={() => setModalPaseFromSocioOpen(false)}
+          onSuccess={() => {
+            setModalPaseFromSocioOpen(false);
             cargarSocios();
           }}
         />

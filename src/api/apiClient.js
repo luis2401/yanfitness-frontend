@@ -75,6 +75,17 @@ export const request = async (endpoint, options = {}) => {
 
   if (!response.ok) {
     let errorMsg = "";
+    const GENERIC_HTTP_ERRORS = new Set([
+      "bad request",
+      "unauthorized",
+      "forbidden",
+      "not found",
+      "conflict",
+      "internal server error",
+      "unprocessable entity",
+      "method not allowed",
+      "no message available",
+    ]);
 
     if (data && typeof data === "object") {
       // 1. Spring Boot MethodArgumentNotValidException / Bean Validation errors
@@ -87,35 +98,82 @@ export const request = async (endpoint, options = {}) => {
         errorMsg = Object.values(data.errors)
           .filter((v) => typeof v === "string" && v.length > 0)
           .join(". ");
-      } else if (data.mensaje) {
+      } else if (data.mensaje && typeof data.mensaje === "string") {
         errorMsg = data.mensaje;
-      } else if (data.message && !data.message.includes("Validation failed for object")) {
+      } else if (
+        data.message &&
+        typeof data.message === "string" &&
+        !data.message.includes("Validation failed for object") &&
+        !GENERIC_HTTP_ERRORS.has(data.message.trim().toLowerCase())
+      ) {
         errorMsg = data.message;
-      } else if (data.error && typeof data.error === "string") {
+      } else if (data.detail && typeof data.detail === "string") {
+        errorMsg = data.detail;
+      } else if (
+        data.error &&
+        typeof data.error === "string" &&
+        !GENERIC_HTTP_ERRORS.has(data.error.trim().toLowerCase())
+      ) {
         errorMsg = data.error;
       }
-    } else if (typeof data === "string" && data.trim().length > 0) {
-      errorMsg = data;
+    } else if (
+      typeof data === "string" &&
+      data.trim().length > 0 &&
+      !GENERIC_HTTP_ERRORS.has(data.trim().toLowerCase())
+    ) {
+      errorMsg = data.trim();
     }
 
-    // Fallbacks if no message extracted
+    // Context-aware Spanish fallbacks if backend did not include a detailed message
     if (!errorMsg) {
       if (response.status === 401) {
         errorMsg = "Credenciales inválidas. Verifica tu usuario y contraseña.";
       } else if (response.status === 423) {
         errorMsg = "Cuenta bloqueada temporalmente por intentos fallidos. Intenta más tarde.";
       } else if (response.status === 403) {
-        errorMsg = "Acceso denegado: no tienes permisos suficientes para esta acción.";
+        errorMsg = "Acceso denegado: tu rol actual no tiene permisos para realizar esta acción.";
       } else if (response.status === 404) {
-        errorMsg = "El recurso o servicio solicitado no fue encontrado (Error 404).";
+        errorMsg = "El registro o servicio solicitado no fue encontrado (Error 404).";
       } else if (response.status === 400) {
-        errorMsg = "Los datos ingresados no cumplen las validaciones requeridas (Error 400).";
+        if (endpoint.includes("/suscripciones")) {
+          errorMsg =
+            "No se pudo procesar la suscripción: verifica que el socio esté activo, que la sede tenga un plan con tarifa vigente y, si modificaste el precio de lista, haber ingresado el motivo en la observación.";
+        } else if (endpoint.includes("/inscripciones")) {
+          errorMsg =
+            "No se pudo inscribir al socio: verifica que el socio esté activo y cuente con una membresía vigente para la sede de esta clase (o acceso Multisede).";
+        } else if (endpoint.includes("/asistencias")) {
+          errorMsg =
+            "No se pudo registrar la asistencia: verifica que la inscripción del socio esté activa y la fecha sea válida.";
+        } else if (endpoint.includes("/asignaciones")) {
+          errorMsg =
+            "Datos de asignación inválidos: verifica que el colaborador y la sede estén activos y que la fecha límite no sea anterior a la fecha de inicio.";
+        } else {
+          errorMsg = "Los datos ingresados no cumplen las validaciones requeridas. Revisa los campos del formulario.";
+        }
       } else if (response.status === 409) {
-        errorMsg = "Conflicto: Ya existe un registro con esos datos (por ejemplo, DNI duplicado).";
+        if (endpoint.includes("/suscripciones")) {
+          errorMsg =
+            "El socio ya cuenta con una membresía activa vigente en esa fecha, o el número de operación ingresado ya fue utilizado.";
+        } else if (endpoint.includes("/pagos")) {
+          errorMsg = "El número de operación ingresado ya existe en otro comprobante de pago.";
+        } else if (endpoint.includes("/asignaciones")) {
+          errorMsg =
+            "El colaborador ya tiene una asignación vigente en esa sede para el periodo seleccionado.";
+        } else if (endpoint.includes("/gimnasio")) {
+          errorMsg = "Ya existe un socio registrado con ese número de DNI o correo electrónico.";
+        } else if (endpoint.includes("/empleados")) {
+          errorMsg = "Ya existe un colaborador registrado con ese número de DNI.";
+        } else if (endpoint.includes("/clases")) {
+          errorMsg = "El instructor seleccionado ya tiene otra clase asignada en ese mismo día y horario.";
+        } else if (endpoint.includes("/inscripciones")) {
+          errorMsg = "El socio ya se encuentra inscrito en esta clase o el cupo máximo está lleno.";
+        } else {
+          errorMsg = "Conflicto de datos: ya existe un registro con esa información o tiene registros vinculados.";
+        }
       } else if (response.status === 500) {
-        errorMsg = "Ocurrió un error en el servidor (Error 500). Verifica los datos ingresados.";
+        errorMsg = "Ocurrió un error interno al procesar la solicitud. Verifica que todos los campos obligatorios estén completos.";
       } else {
-        errorMsg = `Error del servidor (${response.status})`;
+        errorMsg = `Error al procesar la solicitud (Código ${response.status})`;
       }
     }
 

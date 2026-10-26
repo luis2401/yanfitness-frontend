@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { dashboardService } from "../../api/apiClient";
 import FormularioSocioModal from "../socios/FormularioSocioModal";
 import FormularioPaseDiarioModal from "../pagos/FormularioPaseDiarioModal";
+import FormularioSuscripcionModal from "../suscripciones/FormularioSuscripcionModal";
 import ErrorBoundary from "../common/ErrorBoundary";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
@@ -15,20 +16,21 @@ const Layout = ({ activeTab, onSelectTab, children }) => {
 
   // Quick Action Modals
   const [modalQuickSocio, setModalQuickSocio] = useState(false);
+  const [modalQuickSub, setModalQuickSub] = useState(false);
   const [modalQuickPase, setModalQuickPase] = useState(false);
+  const [socioRecienCreado, setSocioRecienCreado] = useState(null);
 
   const fetchKpis = useCallback(async () => {
     try {
       const data = await dashboardService.getDashboard();
       setKpis(data);
     } catch {
-      // In case user is not authorized or backend sleeping
+      // Ignored
     }
   }, []);
 
   useEffect(() => {
     fetchKpis();
-    // Refresh every 60s
     const timer = setInterval(fetchKpis, 60000);
     return () => clearInterval(timer);
   }, [fetchKpis]);
@@ -37,6 +39,7 @@ const Layout = ({ activeTab, onSelectTab, children }) => {
     if (action === "nuevo-socio") {
       setModalQuickSocio(true);
     } else if (action === "pase-diario") {
+      setSocioRecienCreado(null);
       setModalQuickPase(true);
     }
   };
@@ -99,14 +102,39 @@ const Layout = ({ activeTab, onSelectTab, children }) => {
         </div>
       )}
 
-      {/* QUICK ACTION MODALS */}
+      {/* QUICK ACTION: 1. REGISTRAR SOCIO -> 2. ABRIR MODAL DE VENTA DE SUSCRIPCIÓN */}
       {modalQuickSocio && (
         <FormularioSocioModal
           isOpen={modalQuickSocio}
           onClose={() => setModalQuickSocio(false)}
-          onSuccess={() => {
+          onSuccess={(nuevoSocio) => {
             setModalQuickSocio(false);
             fetchKpis();
+            if (nuevoSocio) {
+              setSocioRecienCreado(nuevoSocio);
+              setModalQuickSub(true);
+            }
+          }}
+        />
+      )}
+
+      {modalQuickSub && (
+        <FormularioSuscripcionModal
+          isOpen={modalQuickSub}
+          socioPreseleccionado={socioRecienCreado}
+          onClose={() => {
+            setModalQuickSub(false);
+            fetchKpis();
+          }}
+          onSuccess={() => {
+            setModalQuickSub(false);
+            fetchKpis();
+            onSelectTab("suscripciones");
+          }}
+          onSwitchToPaseDiario={(socioObj) => {
+            setModalQuickSub(false);
+            setSocioRecienCreado(socioObj);
+            setModalQuickPase(true);
           }}
         />
       )}
@@ -114,9 +142,14 @@ const Layout = ({ activeTab, onSelectTab, children }) => {
       {modalQuickPase && (
         <FormularioPaseDiarioModal
           isOpen={modalQuickPase}
-          onClose={() => setModalQuickPase(false)}
+          socioPreseleccionado={socioRecienCreado}
+          onClose={() => {
+            setModalQuickPase(false);
+            setSocioRecienCreado(null);
+          }}
           onSuccess={() => {
             setModalQuickPase(false);
+            setSocioRecienCreado(null);
             fetchKpis();
           }}
         />
