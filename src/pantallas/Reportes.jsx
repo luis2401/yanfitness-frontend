@@ -291,17 +291,17 @@ const Reportes = () => {
   return (
     <div>
       {/* HEADER CARD */}
-      <div className="card" style={{ marginBottom: "20px", padding: "22px 28px" }}>
+      <div className="card" style={{ marginBottom: "20px", padding: "22px 26px" }}>
         <div className="card-header" style={{ margin: 0 }}>
           <div className="card-title-group">
             <h2 style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <BarChart3 size={24} style={{ color: "var(--color-brand-primary)" }} />
-              Inteligencia y Métricas del Gimnasio
+              <BarChart3 size={20} style={{ color: "var(--color-brand-primary)" }} />
+              Reportes Operativos y Financieros
             </h2>
-            <p>Monitoreo gráfico de finanzas, retención de socios y ocupación operativa</p>
+            <p className="prose-limit">Seguimiento de recaudación por periodo, estado del padrón de socios y ocupación de clases</p>
           </div>
 
-          <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <button
               type="button"
               className="btn btn-secondary"
@@ -309,7 +309,7 @@ const Reportes = () => {
               disabled={loading}
               title="Actualizar datos"
             >
-              <RefreshCw size={16} className={loading ? "spinner" : ""} />
+              <RefreshCw size={15} className={loading ? "spinner" : ""} />
               Actualizar
             </button>
             <button
@@ -317,7 +317,7 @@ const Reportes = () => {
               className="btn btn-primary"
               onClick={() => window.print()}
             >
-              <Printer size={16} />
+              <Printer size={15} />
               Imprimir Informe
             </button>
           </div>
@@ -338,7 +338,7 @@ const Reportes = () => {
         }}
       >
         {/* SECTION TABS */}
-        <div style={{ display: "flex", borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border-light)" }}>
+        <div className="nav-pills">
           {[
             { id: "FINANZAS", label: "Ingresos y Caja", icon: Banknote },
             { id: "SOCIOS", label: "Socios y Retención", icon: Users },
@@ -350,22 +350,8 @@ const Reportes = () => {
               <button
                 key={tab.id}
                 type="button"
+                className={`nav-pill ${active ? "active" : ""}`}
                 onClick={() => setSeccionActiva(tab.id)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 16px",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  border: "none",
-                  cursor: "pointer",
-                  background: active
-                    ? "var(--color-brand-primary)"
-                    : "var(--bg-surface-elevated, #162032)",
-                  color: active ? "#090d16" : "var(--text-secondary)",
-                  transition: "all var(--transition-fast)",
-                }}
               >
                 <Icon size={15} />
                 {tab.label}
@@ -449,7 +435,7 @@ const Reportes = () => {
               color="blue"
             />
             <StatCard
-              title="Canal Digital Preferido"
+              title="Canal Preferido"
               value={datosMetodos[0]?.metodo || "EFECTIVO"}
               subtitle={`${datosMetodos[0]?.porcentaje || 0}% de los ingresos`}
               icon={CreditCard}
@@ -469,14 +455,14 @@ const Reportes = () => {
             <div className="card-header" style={{ marginBottom: "16px" }}>
               <div className="card-title-group">
                 <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <TrendingUp size={18} style={{ color: "var(--color-brand-primary)" }} />
-                  Flujo y Tendencia de Ingresos Diarios
+                  <TrendingUp size={17} style={{ color: "var(--color-brand-primary)" }} />
+                  Evolución de ingresos diarios
                 </h3>
-                <p>Evolución de caja generada a lo largo del periodo seleccionado</p>
+                <p>Recaudación registrada a lo largo del periodo seleccionado</p>
               </div>
             </div>
 
-            <div style={{ width: "100%", height: 320 }}>
+            <div style={{ width: "100%", height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={datosEvolucionIngresos}
@@ -484,23 +470,25 @@ const Reportes = () => {
                 >
                   <defs>
                     <linearGradient id="colorMonto" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.22} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="fecha" tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.12)" />
+                  <XAxis dataKey="fecha" tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
                   <YAxis
                     tickFormatter={(v) => `S/ ${v}`}
                     tick={{ fill: "#64748b", fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <Tooltip content={<CustomTooltip prefix="S/ " />} />
                   <Area
                     type="monotone"
                     dataKey="monto"
                     name="Ingreso"
-                    stroke="#2563eb"
-                    strokeWidth={3}
+                    stroke="#10b981"
+                    strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorMonto)"
                   />
@@ -509,34 +497,28 @@ const Reportes = () => {
             </div>
           </div>
 
-          {/* ROW 2: BAR CHART (METODOS) + DONUT (TIPOS) */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-              gap: "24px",
-            }}
-          >
-            {/* PAYMENT METHODS BAR CHART */}
+          {/* ROW 2: ASYMMETRIC BAR CHART (METODOS) + DONUT (TIPOS) */}
+          <div className="dashboard-asymmetric-grid">
+            {/* PAYMENT METHODS BAR CHART (PRIMARY WIDTH) */}
             <div className="card" style={{ padding: "24px" }}>
               <div className="card-header" style={{ marginBottom: "16px" }}>
                 <div className="card-title-group">
-                  <h3>Recaudación por Método de Pago</h3>
-                  <p>Monto en Soles por canal de cobro</p>
+                  <h3>Recaudación por método de pago</h3>
+                  <p>Monto en soles según medio de cobro</p>
                 </div>
               </div>
 
-              <div style={{ width: "100%", height: 260 }}>
+              <div style={{ width: "100%", height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={datosMetodos}
                     margin={{ top: 10, right: 20, left: 10, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="metodo" tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }} />
-                    <YAxis tickFormatter={(v) => `S/ ${v}`} tick={{ fill: "#64748b", fontSize: 11 }} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.12)" />
+                    <XAxis dataKey="metodo" tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={(v) => `S/ ${v}`} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip prefix="S/ " />} />
-                    <Bar dataKey="monto" name="Recaudado" radius={[8, 8, 0, 0]}>
+                    <Bar dataKey="monto" name="Recaudado" radius={[6, 6, 0, 0]}>
                       {datosMetodos.map((m, i) => (
                         <Cell key={`m-${i}`} fill={m.fill} />
                       ))}
@@ -554,15 +536,15 @@ const Reportes = () => {
                       display: "flex",
                       alignItems: "center",
                       gap: "6px",
-                      background: "var(--bg-surface-elevated, #162032)",
+                      background: "var(--bg-surface-elevated)",
                       padding: "6px 12px",
-                      borderRadius: "var(--radius-full)",
+                      borderRadius: "var(--radius-md)",
                       border: "1px solid var(--border-light)",
                       fontSize: "12px",
                     }}
                   >
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: item.fill }} />
-                    <span style={{ fontWeight: 600 }}>{item.metodo}:</span>
+                    <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>{item.metodo}:</span>
                     <strong style={{ color: "var(--text-main)" }}>S/ {item.monto.toFixed(2)}</strong>
                     <span style={{ color: "var(--text-muted)", fontSize: "11px" }}>({item.porcentaje}%)</span>
                   </div>
@@ -570,16 +552,16 @@ const Reportes = () => {
               </div>
             </div>
 
-            {/* SALES TYPE DONUT */}
+            {/* SALES TYPE DONUT (SECONDARY WIDTH) */}
             <div className="card" style={{ padding: "24px" }}>
               <div className="card-header" style={{ marginBottom: "16px" }}>
                 <div className="card-title-group">
-                  <h3>Composición de Ventas</h3>
-                  <p>Membresías periódicas vs Pases diarios</p>
+                  <h3>Composición de ventas</h3>
+                  <p>Membresías vs Pases diarios</p>
                 </div>
               </div>
 
-              <div style={{ width: "100%", height: 260 }}>
+              <div style={{ width: "100%", height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -588,8 +570,8 @@ const Reportes = () => {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      innerRadius={65}
-                      outerRadius={95}
+                      innerRadius={60}
+                      outerRadius={88}
                       paddingAngle={4}
                     >
                       {datosTiposVenta.map((entry, index) => (
@@ -602,11 +584,12 @@ const Reportes = () => {
                 </ResponsiveContainer>
               </div>
 
-              <div style={{ textAlign: "center", fontSize: "13px", color: "var(--text-secondary)", marginTop: "12px" }}>
-                Ingreso predominante: <strong>{datosTiposVenta[0]?.name || "Membresías"}</strong> con{" "}
+              <div style={{ textAlign: "center", fontSize: "12.5px", color: "var(--text-secondary)", marginTop: "12px" }}>
+                Fuente principal: <strong>{datosTiposVenta[0]?.name || "Membresías"}</strong> (
                 <strong>
                   S/ {Number(datosTiposVenta[0]?.value || 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                 </strong>
+                )
               </div>
             </div>
           </div>
@@ -622,7 +605,7 @@ const Reportes = () => {
             <StatCard
               title="Total de Socios"
               value={reporteSocios?.total || 0}
-              subtitle="En base de datos"
+              subtitle="En padrón general"
               icon={Users}
               color="blue"
             />
@@ -636,36 +619,81 @@ const Reportes = () => {
             <StatCard
               title="Socios Inactivos"
               value={reporteSocios?.inactivos || 0}
-              subtitle="Membresía caducada"
+              subtitle="Sin membresía activa"
               icon={Users}
               color="amber"
             />
             <StatCard
-              title="Nuevos Alumnos"
+              title="Altas del Mes"
               value={reporteSocios?.creadosEsteMes || 0}
-              subtitle="Inscritos este mes"
+              subtitle="Nuevos registros"
               icon={Calendar}
               color="purple"
             />
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-              gap: "24px",
-            }}
-          >
-            {/* DONUT ACTIVE VS INACTIVE */}
+          <div className="dashboard-asymmetric-grid">
+            {/* RETENTION HEALTH PROGRESS BARS (PRIMARY WIDTH) */}
             <div className="card" style={{ padding: "24px" }}>
               <div className="card-header" style={{ marginBottom: "16px" }}>
                 <div className="card-title-group">
-                  <h3>Tasa de Socios Activos vs Inactivos</h3>
-                  <p>Salud de la base de miembros del gimnasio</p>
+                  <h3>Indicadores de permanencia</h3>
+                  <p>Proporción de socios con membresía vigente frente al padrón total</p>
                 </div>
               </div>
 
-              <div style={{ width: "100%", height: 280, position: "relative" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "8px" }}>
+                    <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>Socios con membresía activa</span>
+                    <strong>{reporteSocios?.activos || 0} de {reporteSocios?.total || 0} ({porcentajeRetencion}%)</strong>
+                  </div>
+                  <div style={{ width: "100%", height: "8px", background: "var(--border-light)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                    <div style={{ width: `${porcentajeRetencion}%`, height: "100%", background: "#10b981", borderRadius: "var(--radius-full)" }} />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "8px" }}>
+                    <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>Tasa de inactividad</span>
+                    <strong style={{ color: "var(--color-danger)" }}>{100 - porcentajeRetencion}%</strong>
+                  </div>
+                  <div style={{ width: "100%", height: "8px", background: "var(--border-light)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                    <div style={{ width: `${100 - porcentajeRetencion}%`, height: "100%", background: "#f87171", borderRadius: "var(--radius-full)" }} />
+                  </div>
+                </div>
+
+                <div
+                  className="prose-limit"
+                  style={{
+                    background: "var(--bg-surface-elevated)",
+                    padding: "16px",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-light)",
+                    fontSize: "13px",
+                    lineHeight: 1.6,
+                    color: "var(--text-secondary)",
+                    marginTop: "4px",
+                  }}
+                >
+                  <strong style={{ color: "var(--text-main)", display: "block", marginBottom: "4px", fontWeight: 600 }}>
+                    Nota operativa
+                  </strong>
+                  Puedes consultar el listado de contratos próximos a vencer en la sección <strong>Membresías</strong> para contactar a los socios antes del cierre de su periodo.
+                </div>
+              </div>
+            </div>
+
+            {/* DONUT ACTIVE VS INACTIVE (SECONDARY WIDTH) */}
+            <div className="card" style={{ padding: "24px" }}>
+              <div className="card-header" style={{ marginBottom: "16px" }}>
+                <div className="card-title-group">
+                  <h3>Distribución del padrón</h3>
+                  <p>Activos vs inactivos</p>
+                </div>
+              </div>
+
+              <div style={{ width: "100%", height: 240, position: "relative" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -674,8 +702,8 @@ const Reportes = () => {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      innerRadius={70}
-                      outerRadius={100}
+                      innerRadius={64}
+                      outerRadius={90}
                       paddingAngle={4}
                     >
                       {datosSociosDonut.map((entry, index) => (
@@ -697,62 +725,12 @@ const Reportes = () => {
                     pointerEvents: "none",
                   }}
                 >
-                  <span style={{ fontSize: "28px", fontWeight: 800, color: "#10b981" }}>
+                  <span style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-main)" }}>
                     {porcentajeRetencion}%
                   </span>
-                  <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 700 }}>
-                    RETENCIÓN
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 500 }}>
+                    Activos
                   </div>
-                </div>
-              </div>
-            </div>
-
-            {/* RETENTION HEALTH PROGRESS BARS */}
-            <div className="card" style={{ padding: "24px" }}>
-              <div className="card-header" style={{ marginBottom: "16px" }}>
-                <div className="card-title-group">
-                  <h3>Diagnóstico de Fidelización</h3>
-                  <p>Métricas de retención y renovación de membresías</p>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "6px" }}>
-                    <span style={{ fontWeight: 600 }}>Socios con Membresía Vigente</span>
-                    <strong>{reporteSocios?.activos || 0} de {reporteSocios?.total || 0} ({porcentajeRetencion}%)</strong>
-                  </div>
-                  <div style={{ width: "100%", height: "10px", background: "#e2e8f0", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                    <div style={{ width: `${porcentajeRetencion}%`, height: "100%", background: "#10b981", borderRadius: "var(--radius-full)" }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "6px" }}>
-                    <span style={{ fontWeight: 600 }}>Tasa de Inactividad</span>
-                    <strong style={{ color: "var(--color-danger)" }}>{100 - porcentajeRetencion}%</strong>
-                  </div>
-                  <div style={{ width: "100%", height: "10px", background: "var(--border-light, #1e2b42)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
-                    <div style={{ width: `${100 - porcentajeRetencion}%`, height: "100%", background: "#f87171", borderRadius: "var(--radius-full)" }} />
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    background: "var(--bg-surface-elevated, #162032)",
-                    padding: "16px",
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--border-light)",
-                    fontSize: "13px",
-                    lineHeight: 1.6,
-                    color: "var(--text-secondary)",
-                    marginTop: "8px",
-                  }}
-                >
-                  <strong style={{ color: "var(--text-main)", display: "block", marginBottom: "4px" }}>
-                    💡 Recomendación de Fidelización:
-                  </strong>
-                  Se recomienda activar promociones de renovación en la pestaña <strong>"Suscripciones / Por Vencer"</strong> para recuperar alumnos antes del vencimiento del ciclo mensual.
                 </div>
               </div>
             </div>
@@ -769,10 +747,10 @@ const Reportes = () => {
             <div className="card-header" style={{ marginBottom: "16px" }}>
               <div className="card-title-group">
                 <h3 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Calendar size={18} style={{ color: "var(--color-brand-primary)" }} />
-                  Aforo y Alumnos Inscritos por Día de la Semana
+                  <Calendar size={17} style={{ color: "var(--color-brand-primary)" }} />
+                  Capacidad e inscritos por día de la semana
                 </h3>
-                <p>Distribución de demanda semanal en sesiones grupales</p>
+                <p>Comparativa entre el cupo disponible y los alumnos inscritos en clases grupales</p>
               </div>
             </div>
 
@@ -782,13 +760,13 @@ const Reportes = () => {
                   data={datosOcupacionDias}
                   margin={{ top: 10, right: 20, left: 10, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="dia" tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                  <YAxis tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.12)" />
+                  <XAxis dataKey="dia" tick={{ fill: "#64748b", fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip suffix=" alumnos" />} />
                   <Legend verticalAlign="top" height={36} />
-                  <Bar dataKey="cupo" name="Capacidad Máxima" fill="#e2e8f0" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="inscritos" name="Alumnos Inscritos" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="cupo" name="Capacidad Máxima" fill="#334155" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="inscritos" name="Alumnos Inscritos" fill="#10b981" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

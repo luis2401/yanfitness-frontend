@@ -307,10 +307,10 @@ const Empleados = () => {
         <div className="card-header" style={{ margin: 0 }}>
           <div className="card-title-group">
             <h2 style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <Briefcase size={22} style={{ color: "var(--color-brand-primary)" }} />
-              Coaches & Equipo Operativo
+              <Briefcase size={20} style={{ color: "var(--color-brand-primary)" }} />
+              Personal y Asignación de Sedes
             </h2>
-            <p>Directorio de entrenadores, recepcionistas y rotación multisede</p>
+            <p className="prose-limit">Directorio de instructores, recepción y control de rotaciones por sede</p>
           </div>
 
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -320,7 +320,7 @@ const Empleados = () => {
               onClick={cargarDatos}
               disabled={loading}
             >
-              <RefreshCw size={16} className={loading ? "spinner" : ""} />
+              <RefreshCw size={15} className={loading ? "spinner" : ""} />
               Actualizar
             </button>
             {isAdmin && (
@@ -329,21 +329,17 @@ const Empleados = () => {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => handleOpenAsignacionModal(null)}
-                  style={{
-                    borderColor: "rgba(0, 210, 255, 0.4)",
-                    color: "var(--color-accent)",
-                  }}
                 >
-                  <MapPin size={16} />
-                  + Asignar / Rotar Sede
+                  <MapPin size={15} />
+                  Asignar / Rotar Sede
                 </button>
                 <button
                   type="button"
                   className="btn btn-primary"
                   onClick={() => handleOpenModal(null)}
                 >
-                  <UserPlus size={16} />
-                  + Registrar Personal
+                  <UserPlus size={15} />
+                  Registrar Personal
                 </button>
               </>
             )}
@@ -358,7 +354,7 @@ const Empleados = () => {
           className={`nav-pill ${activeSubTab === "directorio" ? "active" : ""}`}
           onClick={() => setActiveSubTab("directorio")}
         >
-          <Dumbbell size={16} />
+          <Dumbbell size={15} />
           Directorio del Personal ({empleados.length})
         </button>
         <button
@@ -366,7 +362,7 @@ const Empleados = () => {
           className={`nav-pill ${activeSubTab === "asignaciones" ? "active" : ""}`}
           onClick={() => setActiveSubTab("asignaciones")}
         >
-          <Building2 size={16} />
+          <Building2 size={15} />
           Asignaciones y Rotaciones de Sede ({asignaciones.length})
         </button>
       </div>
@@ -403,10 +399,10 @@ const Empleados = () => {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                  fontSize: "13.5px",
+                  fontSize: "13px",
                   cursor: "pointer",
-                  fontWeight: 600,
-                  color: "var(--text-main)",
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
                 }}
               >
                 <input
@@ -414,7 +410,7 @@ const Empleados = () => {
                   checked={soloInstructores}
                   onChange={(e) => setSoloInstructores(e.target.checked)}
                 />
-                Ver sólo Coaches / Instructores
+                Mostrar solo instructores
               </label>
             </div>
           </div>
@@ -576,13 +572,13 @@ const Empleados = () => {
           <div className="coach-hero-banner">
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                <Building2 size={20} style={{ color: "var(--color-brand-primary)" }} />
-                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "var(--text-main)" }}>
-                  Rotación y Desplazamiento de Personal entre Sedes
+                <Building2 size={18} style={{ color: "var(--color-brand-primary)" }} />
+                <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: "var(--text-main)" }}>
+                  Rotación y desplazamiento de personal entre sedes
                 </h3>
               </div>
-              <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)", maxWidth: "700px" }}>
-                Un colaborador puede trabajar en una sede fija o ser asignado temporalmente a otra sede para cubrir turnos, vacaciones o dictar clases especiales. Aquí controlas las fechas de inicio, término y vigencia.
+              <p className="prose-limit" style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
+                Un colaborador puede trabajar en una sede fija o ser asignado temporalmente a otra sede para cubrir turnos, vacaciones o dictar clases especiales.
               </p>
             </div>
             {isAdmin && (
@@ -591,8 +587,8 @@ const Empleados = () => {
                 className="btn btn-primary"
                 onClick={() => handleOpenAsignacionModal(null)}
               >
-                <MapPin size={16} />
-                + Nueva Asignación
+                <MapPin size={15} />
+                Nueva Asignación
               </button>
             )}
           </div>
@@ -945,10 +941,10 @@ const Empleados = () => {
       >
         {errorAsignacion && <div className="alert alert-danger">{errorAsignacion}</div>}
 
-        <div style={{ background: "rgba(0, 210, 255, 0.08)", padding: "12px 16px", borderRadius: "var(--radius-md)", border: "1px solid rgba(0, 210, 255, 0.2)", marginBottom: "16px", fontSize: "13px" }}>
-          <strong style={{ color: "var(--color-accent)" }}>¿Cómo funciona?</strong>
-          <p style={{ margin: "4px 0 0 0", color: "var(--text-secondary)" }}>
-            Si dejas la <strong>Fecha Límite en blanco</strong>, el colaborador queda asignado de forma fija a esa sede. Si estableces una fecha fin, actuará como una rotación temporal para cubrir días o turnos específicos.
+        <div className="prose-limit" style={{ background: "var(--bg-surface-elevated)", padding: "12px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", marginBottom: "16px", fontSize: "13px" }}>
+          <strong style={{ color: "var(--text-main)", fontWeight: 600 }}>Modalidad de asignación</strong>
+          <p style={{ margin: "4px 0 0 0", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            Si dejas la <strong>Fecha Límite en blanco</strong>, el colaborador queda asignado de forma fija a esa sede. Si estableces una fecha fin, actuará como una rotación temporal para cubrir turnos específicos.
           </p>
         </div>
 

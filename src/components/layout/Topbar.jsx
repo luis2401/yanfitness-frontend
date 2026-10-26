@@ -10,7 +10,6 @@ import {
   Shield,
   Sun,
   Moon,
-  Sparkles,
   MapPin,
 } from "lucide-react";
 
@@ -27,7 +26,6 @@ const Topbar = ({
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
 
-  // Theme management: default to dark (Fitness Luxury)
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("gym_theme") || "dark";
   });
@@ -41,7 +39,6 @@ const Topbar = ({
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -56,19 +53,19 @@ const Topbar = ({
   }, []);
 
   const titles = {
-    dashboard: { title: "Fitness Hub & Métricas", subtitle: "Seguimiento en tiempo real, entrenamientos y finanzas" },
-    socios: { title: "Clientes & Socios", subtitle: "Directorio de atletas, membresías activas y fichas" },
-    suscripciones: { title: "Membresías & Contratos", subtitle: "Control de vigencias, renovaciones y accesos multisede" },
-    caja: { title: "Caja & Pagos", subtitle: "Cobro de cuotas, pases diarios y comprobantes" },
-    clases: { title: "Clases & Calendario Coach", subtitle: "Horarios semanales, cupos y control de asistencia" },
-    sedes: { title: "Sedes & Centros", subtitle: "Administración de sedes e infraestructura" },
-    planes: { title: "Planes & Tarifas", subtitle: "Catálogo de membresías y precios diferenciados por sede" },
-    empleados: { title: "Coaches & Personal", subtitle: "Entrenadores, recepcionistas y rotación entre sedes" },
-    usuarios: { title: "Seguridad & Accesos", subtitle: "Usuarios del sistema, bloqueo y sesiones activas" },
-    reportes: { title: "Reportes & Analíticas", subtitle: "Gráficos de ingresos, volumen de socios y ocupación" },
+    dashboard: { title: "Resumen Operativo", subtitle: "Estado general de membresías, asistencia y recaudación" },
+    socios: { title: "Directorio de Socios", subtitle: "Padrón de miembros registrados y estado de cuenta" },
+    suscripciones: { title: "Membresías", subtitle: "Control de vigencias, renovaciones y accesos por sede" },
+    caja: { title: "Caja y Pagos", subtitle: "Registro de cobros, pases diarios y arqueo de turno" },
+    clases: { title: "Clases y Horarios", subtitle: "Programación semanal, cupos y lista de asistencia" },
+    sedes: { title: "Sedes y Locales", subtitle: "Administración de locales activos" },
+    planes: { title: "Planes y Tarifas", subtitle: "Catálogo de planes vigentes y tarifas por sede" },
+    empleados: { title: "Personal y Turnos", subtitle: "Instructores, recepción y asignación por sede" },
+    usuarios: { title: "Usuarios del Sistema", subtitle: "Cuentas de acceso, permisos y sesiones" },
+    reportes: { title: "Reportes", subtitle: "Indicadores financieros, retención y ocupación" },
   };
 
-  const currentInfo = titles[activeTab] || { title: "FITNESS COACH", subtitle: "Sistema de gestión deportiva" };
+  const currentInfo = titles[activeTab] || { title: "Panel de Gestión", subtitle: "Administración del gimnasio" };
   const suscripcionesVenciendo = kpis?.suscripcionesPorVencer7Dias || 0;
 
   return (
@@ -82,30 +79,11 @@ const Topbar = ({
           <Menu size={20} />
         </button>
         <div className="topbar-title-block">
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <h1>{currentInfo.title}</h1>
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                padding: "2px 8px",
-                borderRadius: "var(--radius-full)",
-                background: "rgba(16, 185, 129, 0.15)",
-                color: "var(--color-brand-primary)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-                letterSpacing: "0.5px",
-                textTransform: "uppercase",
-              }}
-            >
-              PRO COACH
-            </span>
-          </div>
+          <h1>{currentInfo.title}</h1>
           <div className="topbar-breadcrumb">
-            <span>YAN FITNESS</span>
-            <span>/</span>
-            <span style={{ color: "var(--color-brand-primary)", fontWeight: 600 }}>
-              {currentInfo.title}
-            </span>
+            <span>Yanahuara Fitness</span>
+            <span>·</span>
+            <span>{currentInfo.subtitle}</span>
           </div>
         </div>
       </div>
@@ -119,30 +97,30 @@ const Topbar = ({
               alignItems: "center",
               gap: "6px",
               padding: "6px 12px",
-              borderRadius: "var(--radius-lg)",
-              background: "var(--bg-surface-elevated, #182236)",
+              borderRadius: "var(--radius-md)",
+              background: "var(--bg-surface-elevated)",
               border: "1px solid var(--border-light)",
               fontSize: "12.5px",
               color: "var(--text-main)",
             }}
-            title="Sede donde estás laborando en tu turno de hoy"
+            title="Sede activa en el turno actual"
           >
-            <MapPin size={15} style={{ color: "var(--color-brand-primary)" }} />
-            <span style={{ color: "var(--text-muted)", fontSize: "11px", fontWeight: 700 }}>TURNO:</span>
+            <MapPin size={14} style={{ color: "var(--text-muted)" }} />
+            <span style={{ color: "var(--text-muted)", fontSize: "11.5px", fontWeight: 500 }}>Sede:</span>
             <select
               value={sedeTurno?.id || ""}
               onChange={(e) => {
                 const sel = sedesList.find((s) => String(s.id) === String(e.target.value));
                 if (sel) {
                   setSedeTurno(sel);
-                  showToast(`Sede de turno activa: ${sel.nombre}`, "info");
+                  showToast(`Sede activa: ${sel.nombre}`, "info");
                 }
               }}
               style={{
                 background: "transparent",
                 border: "none",
-                color: "var(--color-brand-primary)",
-                fontWeight: 700,
+                color: "var(--text-main)",
+                fontWeight: 600,
                 fontSize: "12.5px",
                 cursor: "pointer",
                 outline: "none",
@@ -157,45 +135,40 @@ const Topbar = ({
           </div>
         )}
 
-        {/* QUICK ACTION: NUEVO SOCIO */}
-        <button
-          type="button"
-          className="quick-action-btn"
-          onClick={() => onQuickAction("nuevo-socio")}
-          title="Registrar nuevo socio"
-        >
-          <UserPlus size={16} />
-          <span>+ Nuevo Socio</span>
-        </button>
-
-        {/* QUICK ACTION: PASE DIARIO */}
+        {/* SECONDARY QUICK ACTION: PASE DIARIO */}
         <button
           type="button"
           className="quick-action-btn"
           onClick={() => onQuickAction("pase-diario")}
           title="Registrar pase diario para visitante"
-          style={{
-            background: "rgba(16, 185, 129, 0.14)",
-            color: "var(--color-brand-primary)",
-            borderColor: "rgba(16, 185, 129, 0.35)",
-          }}
         >
-          <Ticket size={16} />
-          <span>+ Pase Diario</span>
+          <Ticket size={15} />
+          <span>Pase Diario</span>
         </button>
 
-        {/* THEME TOGGLE (DARK FITNESS / CLEAN LIGHT) */}
+        {/* PRIMARY QUICK ACTION: NUEVO SOCIO */}
+        <button
+          type="button"
+          className="quick-action-btn primary-accent"
+          onClick={() => onQuickAction("nuevo-socio")}
+          title="Registrar nuevo socio"
+        >
+          <UserPlus size={15} />
+          <span>Nuevo Socio</span>
+        </button>
+
+        {/* THEME TOGGLE */}
         <button
           type="button"
           className="theme-toggle-btn"
           onClick={toggleTheme}
-          title={theme === "dark" ? "Cambiar a modo Claro" : "Cambiar a modo Oscuro Fitness"}
+          title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           aria-label="Cambiar tema"
         >
           {theme === "dark" ? (
-            <Sun size={18} style={{ color: "#fbbf24" }} />
+            <Sun size={17} style={{ color: "var(--text-secondary)" }} />
           ) : (
-            <Moon size={18} style={{ color: "var(--color-brand-primary)" }} />
+            <Moon size={17} style={{ color: "var(--text-secondary)" }} />
           )}
         </button>
 
@@ -205,10 +178,10 @@ const Topbar = ({
             type="button"
             className="btn-icon-circle"
             onClick={() => setNotificationsOpen(!notificationsOpen)}
-            title="Notificaciones y Alertas"
+            title="Notificaciones y alertas"
             aria-label="Notificaciones"
           >
-            <Bell size={18} />
+            <Bell size={17} />
             {suscripcionesVenciendo > 0 && <span className="badge-dot" />}
           </button>
 
@@ -217,11 +190,11 @@ const Topbar = ({
               style={{
                 position: "absolute",
                 right: 0,
-                top: "46px",
-                width: "320px",
+                top: "44px",
+                width: "310px",
                 background: "var(--bg-surface)",
                 borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-xl)",
+                boxShadow: "var(--shadow-lg)",
                 border: "1px solid var(--border-light)",
                 padding: "16px",
                 zIndex: 50,
@@ -229,8 +202,8 @@ const Topbar = ({
             >
               <div
                 style={{
-                  fontWeight: 700,
-                  fontSize: "14px",
+                  fontWeight: 600,
+                  fontSize: "13.5px",
                   marginBottom: "12px",
                   display: "flex",
                   justifyContent: "space-between",
@@ -238,9 +211,9 @@ const Topbar = ({
                   color: "var(--text-main)",
                 }}
               >
-                <span>Alertas de Membresías</span>
+                <span>Vencimientos próximos</span>
                 <span className="badge badge-warning">
-                  {suscripcionesVenciendo} aviso(s)
+                  {suscripcionesVenciendo}
                 </span>
               </div>
 
@@ -248,18 +221,18 @@ const Topbar = ({
                 <div
                   style={{
                     padding: "12px",
-                    background: "rgba(245, 158, 11, 0.12)",
+                    background: "var(--bg-surface-elevated)",
                     borderRadius: "var(--radius-md)",
-                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    border: "1px solid var(--border-light)",
                     fontSize: "13px",
                     color: "var(--text-main)",
                   }}
                 >
-                  <p style={{ margin: 0, fontWeight: 700, color: "#fbbf24" }}>
-                    {suscripcionesVenciendo} socio(s) por vencer
+                  <p style={{ margin: 0, fontWeight: 600, color: "var(--color-warning)" }}>
+                    {suscripcionesVenciendo} membresía(s) por vencer
                   </p>
-                  <p style={{ margin: "4px 0 10px 0", fontSize: "12px", color: "var(--text-secondary)" }}>
-                    Finalizan en los próximos 7 días. Conviene gestionar renovación para no perder ritmo de entrenamiento.
+                  <p style={{ margin: "4px 0 12px 0", fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                    Finalizan dentro de los próximos 7 días.
                   </p>
                   <button
                     className="btn btn-primary btn-sm"
@@ -269,12 +242,12 @@ const Topbar = ({
                       onNavigateToTab("suscripciones");
                     }}
                   >
-                    Ver membresías por vencer
+                    Revisar membresías
                   </button>
                 </div>
               ) : (
                 <p style={{ margin: 0, fontSize: "13px", color: "var(--text-muted)" }}>
-                  ¡Todo al día! No hay clientes con membresía próxima a caducar.
+                  No hay membresías próximas a vencer esta semana.
                 </p>
               )}
             </div>
@@ -299,11 +272,11 @@ const Topbar = ({
               style={{
                 position: "absolute",
                 right: 0,
-                top: "46px",
-                width: "230px",
+                top: "44px",
+                width: "220px",
                 background: "var(--bg-surface)",
                 borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-xl)",
+                boxShadow: "var(--shadow-lg)",
                 border: "1px solid var(--border-light)",
                 padding: "8px",
                 zIndex: 50,
@@ -311,28 +284,23 @@ const Topbar = ({
             >
               <div
                 style={{
-                  padding: "10px 12px",
+                  padding: "8px 12px 10px",
                   borderBottom: "1px solid var(--border-light)",
                   marginBottom: "6px",
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: "14px", color: "var(--text-main)" }}>
+                <div style={{ fontWeight: 600, fontSize: "13.5px", color: "var(--text-main)" }}>
                   {usuario?.username}
                 </div>
                 <div
                   style={{
-                    fontSize: "11px",
-                    color: "var(--color-brand-primary)",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
+                    fontSize: "11.5px",
+                    color: "var(--text-muted)",
+                    fontWeight: 500,
                     marginTop: "2px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
                   }}
                 >
-                  <Sparkles size={12} />
-                  {isAdmin ? "Rol: Administrador" : `Rol: ${usuario?.rol || "Staff"}`}
+                  {isAdmin ? "Administrador" : usuario?.rol || "Recepción"}
                 </div>
               </div>
 
