@@ -3,6 +3,7 @@ import Modal from "../common/Modal";
 import { sedesService, pagosService, sociosService } from "../../api/apiClient";
 import { useAuth } from "../../context/AuthContext";
 import { Users, UserPlus, Search, CheckCircle2 } from "lucide-react";
+import { generarNop } from "../../utils/formatters";
 
 const FormularioPaseDiarioModal = ({
   isOpen,
@@ -10,7 +11,7 @@ const FormularioPaseDiarioModal = ({
   onSuccess,
   socioPreseleccionado = null,
 }) => {
-  const { showToast, sedeTurno } = useAuth();
+  const { usuario, showToast, sedeTurno } = useAuth();
   const [sedes, setSedes] = useState([]);
   const [socios, setSocios] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -60,6 +61,13 @@ const FormularioPaseDiarioModal = ({
             ? sedeTurno.id
             : sedesList?.[0]?.id ?? "";
 
+        const sedeObj = sedesList.find((s) => Number(s.id) === Number(defaultSedeId));
+        const nopInicial = generarNop({
+          sedeNombre: sedeObj?.nombre || "Sede Central",
+          vendedorNombre: usuario?.nombre || "Admin Principal",
+          metodoPago: "EFECTIVO",
+        });
+
         if (socioPreseleccionado) {
           setModoCliente("SOCIO_EXISTENTE");
           setSocioElegidoId(String(socioPreseleccionado.id));
@@ -69,6 +77,7 @@ const FormularioPaseDiarioModal = ({
             visitanteNombre: `${socioPreseleccionado.nombre || ""} ${socioPreseleccionado.apellido || ""}`.trim(),
             visitanteDocumento: socioPreseleccionado.dni || "",
             fechaAcceso: getLocalToday(),
+            numeroOperacion: nopInicial,
           }));
         } else if (sociosList.length > 0) {
           setModoCliente("SOCIO_EXISTENTE");
@@ -80,6 +89,7 @@ const FormularioPaseDiarioModal = ({
             visitanteNombre: `${first.nombre || ""} ${first.apellido || ""}`.trim(),
             visitanteDocumento: first.dni || "",
             fechaAcceso: getLocalToday(),
+            numeroOperacion: nopInicial,
           }));
         } else {
           setModoCliente("VISITANTE_EXTERNO");
@@ -90,13 +100,24 @@ const FormularioPaseDiarioModal = ({
             visitanteNombre: "",
             visitanteDocumento: "",
             fechaAcceso: getLocalToday(),
+            numeroOperacion: nopInicial,
           }));
         }
       });
       setBusquedaSocio("");
       setErrorMsg("");
     }
-  }, [isOpen, socioPreseleccionado, sedeTurno]);
+  }, [isOpen, socioPreseleccionado, sedeTurno, usuario]);
+
+  const handleRegenerarNop = () => {
+    const sedeObj = sedes.find((s) => Number(s.id) === Number(form.sedeId));
+    const nuevoNop = generarNop({
+      sedeNombre: sedeObj?.nombre || "Sede Central",
+      vendedorNombre: usuario?.nombre || "Admin Principal",
+      metodoPago: form.metodoPago,
+    });
+    setForm((prev) => ({ ...prev, numeroOperacion: nuevoNop }));
+  };
 
   const sociosFiltrados = useMemo(() => {
     if (!busquedaSocio.trim()) return socios;
@@ -479,14 +500,24 @@ const FormularioPaseDiarioModal = ({
 
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">N° Operación / Referencia</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+              <label className="form-label" style={{ margin: 0 }}>N° Operación (NOP) *</label>
+              <button
+                type="button"
+                onClick={handleRegenerarNop}
+                style={{ background: "none", border: "none", color: "var(--color-brand-primary)", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}
+              >
+                🔄 Nuevo NOP
+              </button>
+            </div>
             <input
               type="text"
               name="numeroOperacion"
               value={form.numeroOperacion}
               onChange={handleChange}
-              placeholder="Ej. Op. 483921 (opcional)"
+              placeholder="Ej. SC-LVE-849201"
               className="form-control"
+              required
             />
           </div>
 

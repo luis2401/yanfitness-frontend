@@ -20,10 +20,14 @@ import {
   Printer,
   CreditCard,
   Smartphone,
+  Eye,
 } from "lucide-react";
 
 const CajaPagos = () => {
   const { usuario, isAdmin, showToast, sedeTurno } = useAuth();
+  const esSupervisor = usuario?.rol === "SUPERVISOR";
+  const puedeAnular = isAdmin || esSupervisor;
+
   const [pagos, setPagos] = useState([]);
   const [sedes, setSedes] = useState([]);
   const [sedeFiltro, setSedeFiltro] = useState(() => (sedeTurno?.id ? String(sedeTurno.id) : ""));
@@ -31,6 +35,10 @@ const CajaPagos = () => {
 
   const [modalPaseOpen, setModalPaseOpen] = useState(false);
   const [modalArqueoOpen, setModalArqueoOpen] = useState(false);
+
+  // Detalle de pago modal
+  const [modalDetalleOpen, setModalDetalleOpen] = useState(false);
+  const [pagoDetalle, setPagoDetalle] = useState(null);
 
   // Void payment modal
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
@@ -205,7 +213,7 @@ const CajaPagos = () => {
                   <th>Vendedor</th>
                   <th>Monto</th>
                   <th>Estado</th>
-                  {isAdmin && <th style={{ textAlign: "right" }}>Acción</th>}
+                  <th style={{ textAlign: "right", minWidth: "90px" }}>Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -264,12 +272,24 @@ const CajaPagos = () => {
                           {p.estado || "PAGADO"}
                         </Badge>
                       </td>
-                      {isAdmin && (
-                        <td style={{ textAlign: "right" }}>
-                          {!esAnulado && (
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", alignItems: "center" }}>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => {
+                              setPagoDetalle(p);
+                              setModalDetalleOpen(true);
+                            }}
+                            title="Ver detalle del comprobante"
+                            style={{ color: "var(--color-brand-primary)" }}
+                          >
+                            <Eye size={15} />
+                          </button>
+                          {puedeAnular && !esAnulado && (
                             <button
                               type="button"
-                              className="btn btn-secondary btn-sm"
+                              className="btn-icon"
                               style={{ color: "var(--color-danger)" }}
                               onClick={() => {
                                 setPagoAAnular(p);
@@ -278,12 +298,11 @@ const CajaPagos = () => {
                               }}
                               title="Anular comprobante"
                             >
-                              <Ban size={14} />
-                              Anular
+                              <Ban size={15} />
                             </button>
                           )}
-                        </td>
-                      )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -311,6 +330,137 @@ const CajaPagos = () => {
         sedeNombre={sedeActualNombre}
         usuario={usuario}
       />
+
+      {/* MODAL DETALLE DE COMPROBANTE / PAGO */}
+      {modalDetalleOpen && pagoDetalle && (
+        <Modal
+          isOpen={modalDetalleOpen}
+          onClose={() => setModalDetalleOpen(false)}
+          title={`Detalle de Comprobante #${pagoDetalle.id}`}
+          footer={
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setModalDetalleOpen(false)}
+            >
+              Cerrar
+            </button>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "14px 16px",
+                background: "var(--bg-app)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-light)",
+              }}
+            >
+              <div>
+                <span style={{ fontSize: "12px", color: "var(--text-muted)", display: "block" }}>
+                  Número de Operación (NOP)
+                </span>
+                <strong style={{ fontSize: "16px", fontFamily: "monospace", color: "var(--color-brand-primary)" }}>
+                  {pagoDetalle.numeroOperacion || `#${pagoDetalle.id}`}
+                </strong>
+              </div>
+              <Badge variant={pagoDetalle.estado === "ANULADO" ? "danger" : "success"}>
+                {pagoDetalle.estado || "PAGADO"}
+              </Badge>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group" style={{ margin: 0 }}>
+                <span className="form-label" style={{ marginBottom: "2px" }}>Concepto</span>
+                <div style={{ fontWeight: 600, color: "var(--text-main)" }}>
+                  {pagoDetalle.tipoVenta === "PASE_DIARIO"
+                    ? "Pase Diario (Acceso por día)"
+                    : pagoDetalle.nombrePlan || "Suscripción a Membresía"}
+                </div>
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <span className="form-label" style={{ marginBottom: "2px" }}>Fecha y Hora</span>
+                <div style={{ color: "var(--text-main)" }}>
+                  {pagoDetalle.fechaPago
+                    ? `${new Date(pagoDetalle.fechaPago).toLocaleDateString("es-PE")} a las ${new Date(pagoDetalle.fechaPago).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`
+                    : "—"}
+                </div>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group" style={{ margin: 0 }}>
+                <span className="form-label" style={{ marginBottom: "2px" }}>Cliente / Socio</span>
+                <div style={{ fontWeight: 600, color: "var(--text-main)" }}>
+                  {pagoDetalle.socioNombre || pagoDetalle.visitanteNombre || "Cliente General"}
+                </div>
+                {pagoDetalle.visitanteDocumento && (
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                    Doc: {pagoDetalle.visitanteDocumento}
+                  </span>
+                )}
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <span className="form-label" style={{ marginBottom: "2px" }}>Sede de Emisión</span>
+                <div style={{ color: "var(--text-main)" }}>
+                  {pagoDetalle.sedeNombre || "Sede Central"}
+                </div>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group" style={{ margin: 0 }}>
+                <span className="form-label" style={{ marginBottom: "2px" }}>Método de Pago</span>
+                <div>
+                  <Badge variant="blue">{pagoDetalle.metodo || "EFECTIVO"}</Badge>
+                </div>
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <span className="form-label" style={{ marginBottom: "2px" }}>Vendedor / Caja</span>
+                <div style={{ color: "var(--text-secondary)" }}>
+                  {pagoDetalle.vendedorNombre || "Caja General"}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px",
+                background: "var(--color-brand-muted)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid rgba(16, 185, 129, 0.25)",
+              }}
+            >
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-brand-primary)" }}>
+                Total Pagado
+              </span>
+              <strong style={{ fontSize: "20px", color: "var(--color-brand-primary)" }}>
+                S/ {Number(pagoDetalle.monto || 0).toFixed(2)}
+              </strong>
+            </div>
+
+            {pagoDetalle.estado === "ANULADO" && (
+              <div className="alert alert-danger" style={{ margin: 0 }}>
+                <div style={{ fontWeight: 600, marginBottom: "4px" }}>Comprobante Anulado</div>
+                <div style={{ fontSize: "12.5px" }}>
+                  Motivo: {pagoDetalle.motivoAnulacion || "Sin motivo registrado"}
+                </div>
+                {pagoDetalle.anuladoPor && (
+                  <div style={{ fontSize: "11.5px", marginTop: "2px", opacity: 0.85 }}>
+                    Anulado por: {pagoDetalle.anuladoPor}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {/* MODAL ANULAR PAGO */}
       <Modal

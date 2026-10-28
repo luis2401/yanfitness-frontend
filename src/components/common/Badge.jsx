@@ -1,16 +1,23 @@
 import React from "react";
 
-const Badge = ({ status, text, type = null }) => {
+const Badge = ({
+  status,
+  text,
+  type = null,
+  variant = null,
+  dot = true,
+  children,
+}) => {
   let badgeClass = "badge-info";
-  let displayDot = true;
+  const finalType = variant || type;
 
-  if (type) {
-    badgeClass = `badge-${type}`;
+  if (finalType) {
+    badgeClass = `badge-${finalType}`;
   } else if (typeof status === "boolean") {
     badgeClass = status ? "badge-success" : "badge-danger";
   } else if (typeof status === "string") {
     const s = status.toUpperCase();
-    if (["ACTIVO", "ACTIVA", "PRESENTE", "PAGADO", "COMPLETADA"].includes(s)) {
+    if (["ACTIVO", "ACTIVA", "PRESENTE", "PAGADO", "COMPLETADA", "COMPLETADO"].includes(s)) {
       badgeClass = "badge-success";
     } else if (["PENDIENTE", "EN_CURSO", "JUSTIFICADA"].includes(s)) {
       badgeClass = "badge-warning";
@@ -18,14 +25,19 @@ const Badge = ({ status, text, type = null }) => {
       badgeClass = "badge-danger";
     } else if (["SUSPENDIDA"].includes(s)) {
       badgeClass = "badge-purple";
+    } else if (["EFECTIVO", "YAPE", "PLIN", "TARJETA", "TRANSFERENCIA"].includes(s)) {
+      badgeClass = "badge-blue";
     }
   }
 
-  const label = text || (typeof status === "boolean" ? (status ? "Activo" : "Inactivo") : status);
+  const label =
+    children ??
+    text ??
+    (typeof status === "boolean" ? (status ? "Activo" : "Inactivo") : status);
 
   return (
     <span className={`badge ${badgeClass}`}>
-      {displayDot && <span className="badge-dot" />}
+      {dot && <span className="badge-dot" />}
       {label}
     </span>
   );

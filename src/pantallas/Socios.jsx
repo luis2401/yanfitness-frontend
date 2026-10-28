@@ -23,7 +23,10 @@ import {
 } from "lucide-react";
 
 const Socios = () => {
-  const { isAdmin, showToast } = useAuth();
+  const { usuario, isAdmin, showToast } = useAuth();
+  const esSupervisor = usuario?.rol === "SUPERVISOR";
+  const puedeEliminarSocio = isAdmin || esSupervisor;
+
   const [socios, setSocios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,7 +49,7 @@ const Socios = () => {
       const data = await sociosService.listar();
       setSocios(Array.isArray(data) ? data : data?.content || []);
     } catch (err) {
-      showToast(err.message || "Error al cargar la lista de socios", "error");
+      showToast(err.message || "Error al cargar el directorio de socios", "error");
       setSocios([]);
     } finally {
       setLoading(false);
@@ -72,8 +75,8 @@ const Socios = () => {
   };
 
   const handleEliminar = async (socio) => {
-    if (!isAdmin) {
-      showToast("Solo los administradores pueden eliminar registros", "error");
+    if (!puedeEliminarSocio) {
+      showToast("Solo administradores y supervisores pueden eliminar socios", "error");
       return;
     }
     const confirmar = window.confirm(
@@ -304,20 +307,6 @@ const Socios = () => {
                         <Eye size={16} />
                       </button>
 
-                      {/* VENDER MEMBRESÍA */}
-                      <button
-                        type="button"
-                        className="btn-icon"
-                        title="Asignar suscripción"
-                        style={{ color: "var(--color-brand-primary)" }}
-                        onClick={() => {
-                          setSocioParaSub(socio);
-                          setModalSubOpen(true);
-                        }}
-                      >
-                        <CreditCard size={16} />
-                      </button>
-
                       {/* EDITAR */}
                       <button
                         type="button"
@@ -342,8 +331,8 @@ const Socios = () => {
                         <Power size={16} />
                       </button>
 
-                      {/* ELIMINAR (SOLO ADMIN) */}
-                      {isAdmin && (
+                      {/* ELIMINAR (ADMIN O SUPERVISOR) */}
+                      {puedeEliminarSocio && (
                         <button
                           type="button"
                           className="btn-icon"

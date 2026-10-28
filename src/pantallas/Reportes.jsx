@@ -298,7 +298,7 @@ const Reportes = () => {
               <BarChart3 size={20} style={{ color: "var(--color-brand-primary)" }} />
               Reportes Operativos y Financieros
             </h2>
-            <p className="prose-limit">Seguimiento de recaudación por periodo, estado del padrón de socios y ocupación de clases</p>
+            <p className="prose-limit">Seguimiento de recaudación por periodo, estado de socios y ocupación de clases</p>
           </div>
 
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -605,7 +605,7 @@ const Reportes = () => {
             <StatCard
               title="Total de Socios"
               value={reporteSocios?.total || 0}
-              subtitle="En padrón general"
+              subtitle="En registro general"
               icon={Users}
               color="blue"
             />
@@ -638,7 +638,7 @@ const Reportes = () => {
               <div className="card-header" style={{ marginBottom: "16px" }}>
                 <div className="card-title-group">
                   <h3>Indicadores de permanencia</h3>
-                  <p>Proporción de socios con membresía vigente frente al padrón total</p>
+                  <p>Proporción de socios con membresía vigente frente al total de registros</p>
                 </div>
               </div>
 
@@ -688,7 +688,7 @@ const Reportes = () => {
             <div className="card" style={{ padding: "24px" }}>
               <div className="card-header" style={{ marginBottom: "16px" }}>
                 <div className="card-title-group">
-                  <h3>Distribución del padrón</h3>
+                  <h3>Distribución de socios</h3>
                   <p>Activos vs inactivos</p>
                 </div>
               </div>

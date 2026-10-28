@@ -71,17 +71,31 @@ function AppContent() {
     return <NotFound onResetRoute={cambiarPantalla} />;
   }
 
+  // Redireccionar al instructor automáticamente a Clases y Horarios
+  useEffect(() => {
+    if (usuario?.rol === "INSTRUCTOR" && pantallaActual !== "clases") {
+      cambiarPantalla("clases");
+    }
+  }, [usuario, pantallaActual, cambiarPantalla]);
+
   // If not authenticated, render Login
   if (!usuario) {
     return (
       <Login
         onLogin={(datosUsuario) => {
           login(datosUsuario, true);
-          cambiarPantalla("dashboard");
+          if (datosUsuario?.rol === "INSTRUCTOR") {
+            cambiarPantalla("clases");
+          } else {
+            cambiarPantalla("dashboard");
+          }
         }}
       />
     );
   }
+
+  const esSupervisor = usuario?.rol === "SUPERVISOR";
+  const esAdminOSupervisor = isAdmin || esSupervisor;
 
   const handleQuickAction = (action) => {
     if (action === "nuevo-socio") {
@@ -92,6 +106,11 @@ function AppContent() {
   };
 
   const renderPantalla = () => {
+    // Si el usuario es Instructor, sólo accede al módulo de Clases y Horarios
+    if (usuario?.rol === "INSTRUCTOR") {
+      return <Clases />;
+    }
+
     switch (pantallaActual) {
       case "dashboard":
         return (
@@ -113,11 +132,11 @@ function AppContent() {
       case "planes":
         return <Planes />;
       case "empleados":
-        return isAdmin ? <Empleados /> : <Dashboard onNavigate={cambiarPantalla} onQuickAction={handleQuickAction} />;
+        return esAdminOSupervisor ? <Empleados /> : <Dashboard onNavigate={cambiarPantalla} onQuickAction={handleQuickAction} />;
       case "usuarios":
         return isAdmin ? <Usuarios /> : <Dashboard onNavigate={cambiarPantalla} onQuickAction={handleQuickAction} />;
       case "reportes":
-        return isAdmin ? <Reportes /> : <Dashboard onNavigate={cambiarPantalla} onQuickAction={handleQuickAction} />;
+        return esAdminOSupervisor ? <Reportes /> : <Dashboard onNavigate={cambiarPantalla} onQuickAction={handleQuickAction} />;
       default:
         return <NotFound onResetRoute={cambiarPantalla} />;
     }

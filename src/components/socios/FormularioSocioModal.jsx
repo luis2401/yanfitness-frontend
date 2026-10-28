@@ -56,7 +56,7 @@ const FormularioSocioModal = ({
     setFieldErrors({});
   }, [socioAEditar, isOpen]);
 
-  // Detectar si el DNI ingresado ya pertenece a un socio en el padrón
+  // Detectar si el DNI ingresado ya pertenece a un socio en el directorio
   const socioExistentePorDni = useMemo(() => {
     if (socioAEditar) return null;
     const dniLimpio = (form.dni || "").trim();
@@ -198,10 +198,10 @@ const FormularioSocioModal = ({
     if (e && e.preventDefault) e.preventDefault();
     setErrorMsg("");
 
-    // Si el DNI ya existe en el padrón, pasamos directamente a la venta/renovación con ese socio
+    // Si el DNI ya existe en el directorio, pasamos directamente a la venta/renovación con ese socio
     if (socioExistentePorDni) {
       showToast(
-        `Socio ${socioExistentePorDni.nombre} ${socioExistentePorDni.apellido || ""} seleccionado del padrón.`,
+        `Socio ${socioExistentePorDni.nombre} ${socioExistentePorDni.apellido || ""} seleccionado del registro.`,
         "info"
       );
       onSuccess(socioExistentePorDni);
@@ -294,7 +294,7 @@ const FormularioSocioModal = ({
             <span>✨</span>
             <div>
               <div style={{ fontWeight: 600, color: "#6ee7b7", marginBottom: "2px" }}>
-                Socio ya registrado en el padrón
+                Socio ya registrado en el directorio
               </div>
               <div style={{ fontSize: "12.5px", color: "#d1fae5" }}>
                 El DNI <strong>{socioExistentePorDni.dni}</strong> pertenece a{" "}

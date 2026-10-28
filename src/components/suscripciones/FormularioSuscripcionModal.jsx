@@ -8,6 +8,7 @@ import {
   pagosService,
 } from "../../api/apiClient";
 import { useAuth } from "../../context/AuthContext";
+import { generarNop } from "../../utils/formatters";
 
 const METODOS_PAGO = [
   { valor: "EFECTIVO", label: "Efectivo" },
@@ -204,13 +205,20 @@ const FormularioSuscripcionModal = ({
         const subPrevia = encontrarUltimaSuscripcionActiva(initialSocioId, aSubs);
         const fechaInicioSugerida = subPrevia?.fechaFin ? subPrevia.fechaFin : getLocalToday();
 
+        const sedeObj = sedesList.find((s) => Number(s.id) === Number(initialSedeId));
+        const nopInicial = generarNop({
+          sedeNombre: sedeObj?.nombre || "Sede Central",
+          vendedorNombre: usuario?.nombre || "Admin Principal",
+          metodoPago: "EFECTIVO",
+        });
+
         setForm((prev) => ({
           ...prev,
           socioId: initialSocioId,
           sedeId: initialSedeId,
           fechaInicio: fechaInicioSugerida,
           observacionPrecio: "",
-          numeroOperacion: "",
+          numeroOperacion: nopInicial,
         }));
 
         if (initialSedeId) {
@@ -220,7 +228,17 @@ const FormularioSuscripcionModal = ({
       setErrorMsg("");
       setFieldErrors({});
     }
-  }, [isOpen, socioPreseleccionado]);
+  }, [isOpen, socioPreseleccionado, usuario]);
+
+  const handleRegenerarNop = () => {
+    const sedeObj = sedes.find((s) => Number(s.id) === Number(form.sedeId));
+    const nuevoNop = generarNop({
+      sedeNombre: sedeObj?.nombre || "Sede Central",
+      vendedorNombre: usuario?.nombre || "Admin Principal",
+      metodoPago: form.metodoPago,
+    });
+    setForm((prev) => ({ ...prev, numeroOperacion: nuevoNop }));
+  };
 
   const handleSedeChange = (e) => {
     const sedeId = e.target.value;
@@ -875,15 +893,25 @@ const FormularioSuscripcionModal = ({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Nro. de Operación / Voucher</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+              <label className="form-label" style={{ margin: 0 }}>Nro. de Operación (NOP) *</label>
+              <button
+                type="button"
+                onClick={handleRegenerarNop}
+                style={{ background: "none", border: "none", color: "var(--color-brand-primary)", fontSize: "11px", cursor: "pointer", fontWeight: 600 }}
+              >
+                🔄 Nuevo NOP
+              </button>
+            </div>
             <input
               type="text"
               name="numeroOperacion"
               value={form.numeroOperacion}
               onChange={handleChange}
-              placeholder="Ej. OP-984321 / Yape 1234"
+              placeholder="Ej. SC-LVE-849201"
               className={`form-control ${fieldErrors.numeroOperacion ? "is-invalid" : ""}`}
               maxLength={48}
+              required
             />
             {fieldErrors.numeroOperacion && (
               <span className="field-error-text">ℹ️ {fieldErrors.numeroOperacion}</span>

@@ -196,6 +196,14 @@
   cursor: pointer;
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease-out, border-color 200ms ease-out, color 200ms ease-out, box-shadow 200ms ease-out;
   white-space: nowrap;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.btn:focus,
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
 }
 
 .btn:hover:not(:disabled) {
@@ -541,8 +549,14 @@ textarea.form-control {
 
 .form-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+@media (max-width: 580px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .search-input-wrapper,

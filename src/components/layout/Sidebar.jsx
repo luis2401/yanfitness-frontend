@@ -78,15 +78,27 @@ const Sidebar = ({ activeTab, onSelectTab, isOpen, onCloseMobile, kpis }) => {
     },
     {
       id: "reportes",
-      label: "Reportes Ejecutivos",
+      label: "Reportes",
       icon: BarChart3,
-      roles: ["ADMIN"],
+      roles: ["ADMIN", "SUPERVISOR"],
     },
   ];
 
-  const filteredNav = navItems.filter(
-    (item) => item.roles.includes("ALL") || (item.roles.includes("ADMIN") && isAdmin)
-  );
+  const esInstructor = usuario?.rol === "INSTRUCTOR";
+  const esSupervisor = usuario?.rol === "SUPERVISOR";
+  const esAdminOSupervisor = isAdmin || esSupervisor;
+
+  const filteredNav = navItems.filter((item) => {
+    // Si el rol es Instructor, en la navegación únicamente ve Clases y Horarios
+    if (esInstructor) {
+      return item.id === "clases";
+    }
+
+    if (item.roles.includes("ALL")) return true;
+    if (item.roles.includes("ADMIN")) return esAdminOSupervisor;
+    if (item.roles.includes("SUPERVISOR")) return esAdminOSupervisor;
+    return false;
+  });
 
   return (
     <>

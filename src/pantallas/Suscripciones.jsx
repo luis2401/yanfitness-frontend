@@ -6,6 +6,7 @@ import EmptyState from "../components/common/EmptyState";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import FormularioSuscripcionModal from "../components/suscripciones/FormularioSuscripcionModal";
 import Modal from "../components/common/Modal";
+import { formatearVigenciaMembresia } from "../utils/formatters";
 import {
   CreditCard,
   Plus,
@@ -240,7 +241,7 @@ const Suscripciones = () => {
                         {sub.nombrePlanVendido || "Plan de Gimnasio"}
                       </div>
                       <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                        {sub.duracionDiasVendida} días de cobertura
+                        {formatearVigenciaMembresia(sub.duracionDiasVendida)}
                       </div>
                     </td>
 

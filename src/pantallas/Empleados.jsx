@@ -57,8 +57,9 @@ const esRolAsignableASede = (emp) => {
 };
 
 const Empleados = () => {
-  const { isAdmin, showToast } = useAuth();
-  const [activeSubTab, setActiveSubTab] = useState("directorio"); // "directorio" | "asignaciones"
+  const { usuario, isAdmin, showToast } = useAuth();
+  const esSuperOAdmin = isAdmin || usuario?.rol === "SUPERVISOR";
+  const [activeSubTab, setActiveSubTab] = useState("directorio"); // "directorio" | "rotaciones"
 
   // DIRECTORY STATE
   const [empleados, setEmpleados] = useState([]);
@@ -254,26 +255,64 @@ const Empleados = () => {
   // Empleados elegibles para ser asignados a una sede (Activos y rol != ADMINISTRADOR / SUPERVISOR)
   const empleadosAsignables = empleados.filter((e) => e.activo && esRolAsignableASede(e));
 
-  // OPEN MODAL ASIGNACION
+  const calcularFechaHastaRotacion = (desdeStr, duracionOpcion) => {
+    if (!desdeStr) return "";
+    if (duracionOpcion === "custom") return "";
+    const dias = Number(duracionOpcion || 1);
+    const d = new Date(desdeStr + "T00:00:00");
+    d.setDate(d.getDate() + dias);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  // OPEN MODAL ASIGNACION / ROTACION
   const handleOpenAsignacionModal = (empDefault = null) => {
-    if (empDefault && !esRolAsignableASede(empDefault)) {
-      showToast(
-        "Los roles Administrador y Supervisor tienen alcance global y no se asignan a una sede específica.",
-        "info"
+    // Si no es admin ni supervisor, sólo puede rotarse a sí mismo
+    let defaultEmpId = "";
+    if (!isAdmin && usuario?.rol !== "SUPERVISOR") {
+      const selfEmp = empleados.find(
+        (e) => e.correo === usuario?.correo || e.dni === usuario?.dni || Number(e.id) === Number(usuario?.id)
       );
-      return;
+      defaultEmpId = selfEmp ? String(selfEmp.id) : (empleadosAsignables[0]?.id ? String(empleadosAsignables[0].id) : "");
+    } else {
+      defaultEmpId = empDefault?.id || (empleadosAsignables[0]?.id ? String(empleadosAsignables[0].id) : "");
     }
-    const defaultEmpId =
-      empDefault?.id || (empleadosAsignables[0]?.id ? String(empleadosAsignables[0].id) : "");
+
+    const today = getLocalToday();
+    const fin1Dia = calcularFechaHastaRotacion(today, "1");
 
     setFormAsignacion({
       empleadoId: String(defaultEmpId),
       sedeId: sedes[0]?.id ? String(sedes[0].id) : "",
-      fechaDesde: getLocalToday(),
-      fechaHasta: "",
+      fechaDesde: today,
+      duracionOpcion: "1",
+      fechaHasta: fin1Dia,
     });
     setErrorAsignacion("");
     setModalAsignacionOpen(true);
+  };
+
+  const handleDuracionChange = (opcion) => {
+    let hasta = formAsignacion.fechaHasta;
+    if (opcion !== "custom") {
+      hasta = calcularFechaHastaRotacion(formAsignacion.fechaDesde, opcion);
+    }
+    setFormAsignacion((prev) => ({
+      ...prev,
+      duracionOpcion: opcion,
+      fechaHasta: hasta,
+    }));
+  };
+
+  const handleFechaDesdeChange = (nuevaDesde) => {
+    let hasta = formAsignacion.fechaHasta;
+    if (formAsignacion.duracionOpcion !== "custom") {
+      hasta = calcularFechaHastaRotacion(nuevaDesde, formAsignacion.duracionOpcion);
+    }
+    setFormAsignacion((prev) => ({
+      ...prev,
+      fechaDesde: nuevaDesde,
+      fechaHasta: hasta,
+    }));
   };
 
   // SUBMIT ASIGNACION / ROTACION
@@ -286,7 +325,7 @@ const Empleados = () => {
       return;
     }
     if (!formAsignacion.sedeId) {
-      setErrorAsignacion("Debes seleccionar una sede.");
+      setErrorAsignacion("Debes seleccionar una sede de destino.");
       return;
     }
     if (
@@ -301,7 +340,7 @@ const Empleados = () => {
     const empObj = empleados.find((emp) => Number(emp.id) === Number(formAsignacion.empleadoId));
     if (empObj && !esRolAsignableASede(empObj)) {
       setErrorAsignacion(
-        "Los colaboradores con rol Administrador o Supervisor tienen alcance en todas las sedes y no requieren asignación por sede."
+        "Los colaboradores con rol Administrador o Supervisor tienen alcance en todas las sedes y no requieren rotación por sede."
       );
       return;
     }
@@ -315,55 +354,70 @@ const Empleados = () => {
         fechaHasta: formAsignacion.fechaHasta || null,
       });
 
-      showToast("Asignación de sede registrada correctamente", "success");
+      showToast("Rotación de personal registrada correctamente", "success");
       setModalAsignacionOpen(false);
       setFiltroEstadoAsignacion("VIGENTES");
       cargarDatos();
     } catch (err) {
-      setErrorAsignacion(err.message || "Error al asignar colaborador a la sede.");
+      setErrorAsignacion(err.message || "Error al registrar la rotación.");
     } finally {
       setSavingAsignacion(false);
     }
   };
 
-  // Determinar estado real de una asignación
+  // Determinar estado real de una rotación
   const evaluarEstadoAsignacion = (asig) => {
     const todayStr = getLocalToday();
     const esAnulada = Boolean(asig.anulada);
     const tieneFechaFin = Boolean(asig.fechaHasta);
-    // Si tiene fechaHasta menor o igual a hoy, la asignación ya concluyó (ej. al darle a Finalizar Hoy)
-    const esFinalizada = !esAnulada && tieneFechaFin && asig.fechaHasta <= todayStr;
-    const esVigente = !esAnulada && !esFinalizada;
-    return { esAnulada, tieneFechaFin, esFinalizada, esVigente };
+    // Si tiene fechaHasta menor estricta a hoy, ya concluyó
+    const esFinalizada = !esAnulada && tieneFechaFin && asig.fechaHasta < todayStr;
+    const esProgramada = !esAnulada && !esFinalizada && Boolean(asig.fechaDesde) && asig.fechaDesde > todayStr;
+    const esVigente = !esAnulada && !esFinalizada && !esProgramada;
+    return { esAnulada, tieneFechaFin, esFinalizada, esProgramada, esVigente };
   };
 
-  // FINALIZAR ASIGNACION (TERMINAR ASIGNACION HOY)
+  // Helper: Obtener Sede Base (fija: fechaHasta == null) y Rotación Activa
+  const obtenerSedeInfoEmpleado = (empId) => {
+    const asigsEmp = asignaciones.filter((a) => Number(a.empleadoId) === Number(empId) && !a.anulada);
+    const fija = asigsEmp.find((a) => !a.fechaHasta);
+    const rotacionActiva = asigsEmp.find((a) => {
+      const { esVigente, tieneFechaFin } = evaluarEstadoAsignacion(a);
+      return esVigente && tieneFechaFin;
+    });
+    return {
+      sedeBase: fija ? fija.sedeNombre || `Sede #${fija.sedeId}` : null,
+      rotacionActiva: rotacionActiva ? (rotacionActiva.sedeNombre || `Sede #${rotacionActiva.sedeId}`) : null,
+      rotacionFin: rotacionActiva ? rotacionActiva.fechaHasta : null,
+    };
+  };
+
+  // FINALIZAR ROTACIÓN (CULMINAR INMEDIATAMENTE)
   const handleFinalizarAsignacion = async (asig) => {
     const nombre = asig.empleadoNombre || `Colaborador #${asig.empleadoId}`;
-    if (!window.confirm(`¿Dar por finalizada la asignación de ${nombre} en ${asig.sedeNombre || "esta sede"}?`)) {
+    if (!window.confirm(`¿Dar por culminada la rotación de ${nombre} en ${asig.sedeNombre || "esta sede"}? Volverá a su sede base de inmediato.`)) {
       return;
     }
     try {
-      const todayStr = getLocalToday();
-      // Si la fecha de inicio era posterior a hoy, usamos fechaDesde para cumplir fechaHasta >= fechaDesde
-      const fechaFinEfectiva =
-        asig.fechaDesde && asig.fechaDesde > todayStr ? asig.fechaDesde : todayStr;
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
 
       await asignacionesService.finalizar(asig.id, {
-        fechaHasta: fechaFinEfectiva,
+        fechaHasta: yesterdayStr,
       });
 
-      // Actualización inmediata en memoria para reflejar el cambio al instante
+      // Actualización inmediata en memoria para que desaparezca de "Vigentes" al instante
       setAsignaciones((prev) =>
         prev.map((item) =>
-          item.id === asig.id ? { ...item, fechaHasta: fechaFinEfectiva } : item
+          item.id === asig.id ? { ...item, fechaHasta: yesterdayStr } : item
         )
       );
 
-      showToast("Asignación finalizada correctamente", "success");
+      showToast("Rotación culminada. El colaborador vuelve a su sede base.", "success");
       cargarDatos();
     } catch (err) {
-      showToast(err.message || "Error al finalizar asignación", "error");
+      showToast(err.message || "Error al finalizar rotación", "error");
     }
   };
 
@@ -395,10 +449,12 @@ const Empleados = () => {
     );
   });
 
-  const totalVigentes = asignaciones.filter((a) => evaluarEstadoAsignacion(a).esVigente).length;
-  const totalHistorial = asignaciones.filter((a) => !evaluarEstadoAsignacion(a).esVigente).length;
+  // En la pestaña de Rotación solo mostramos rotaciones temporales (tienen fechaHasta definido)
+  const soloRotaciones = asignaciones.filter((a) => Boolean(a.fechaHasta));
+  const totalRotacionesVigentes = soloRotaciones.filter((a) => evaluarEstadoAsignacion(a).esVigente).length;
+  const totalRotacionesHistorial = soloRotaciones.filter((a) => !evaluarEstadoAsignacion(a).esVigente).length;
 
-  const asignacionesFiltradas = asignaciones.filter((asig) => {
+  const rotacionesFiltradas = soloRotaciones.filter((asig) => {
     if (filtroSedeAsignacion && String(asig.sedeId) !== String(filtroSedeAsignacion)) {
       return false;
     }
@@ -478,7 +534,7 @@ const Empleados = () => {
           onClick={() => setActiveSubTab("asignaciones")}
         >
           <Building2 size={15} />
-          Asignaciones de Sede ({totalVigentes} vigentes)
+          Rotación de Personal ({totalRotacionesVigentes} vigentes)
         </button>
       </div>
 
@@ -536,7 +592,7 @@ const Empleados = () => {
             <EmptyState
               title="No se encontraron colaboradores"
               description={searchTerm ? "Intenta con otro término de búsqueda." : "Comienza registrando a tu personal o entrenadores."}
-              actionLabel={isAdmin ? "Registrar Primer Colaborador" : null}
+              actionLabel={esSuperOAdmin ? "Registrar Primer Colaborador" : null}
               onAction={() => handleOpenModal(null)}
             />
           ) : (
@@ -548,16 +604,19 @@ const Empleados = () => {
                       <th style={{ minWidth: "220px" }}>Colaborador</th>
                       <th style={{ minWidth: "110px" }}>DNI</th>
                       <th style={{ minWidth: "140px" }}>Rol y Función</th>
+                      <th style={{ minWidth: "180px" }}>Sede Base / Fija</th>
                       <th style={{ minWidth: "150px" }}>Especialidad</th>
                       <th style={{ minWidth: "160px" }}>Contacto</th>
                       <th style={{ minWidth: "100px" }}>Estado</th>
-                      {isAdmin && <th style={{ minWidth: "130px", textAlign: "right" }}>Acciones</th>}
+                      {esSuperOAdmin && <th style={{ minWidth: "130px", textAlign: "right" }}>Acciones</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {empleadosFiltrados.map((emp) => {
                       const rolNombre = obtenerRolEmpleado(emp);
                       const puedeAsignarSede = esRolAsignableASede(emp);
+                      const { sedeBase, rotacionActiva, rotacionFin } = obtenerSedeInfoEmpleado(emp.id);
+
                       return (
                         <tr key={emp.id}>
                           <td>
@@ -618,6 +677,25 @@ const Empleados = () => {
                             </div>
                           </td>
                           <td>
+                            {!puedeAsignarSede ? (
+                              <span style={{ fontSize: "12.5px", color: "var(--text-muted)", fontStyle: "italic" }}>
+                                Todas las sedes (Global)
+                              </span>
+                            ) : (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 500 }}>
+                                  <Building2 size={14} style={{ color: "var(--color-brand-primary)" }} />
+                                  <span>{sedeBase || "Sin sede fija asignada"}</span>
+                                </div>
+                                {rotacionActiva && (
+                                  <Badge variant="warning" dot>
+                                    🔄 En rotación: {rotacionActiva} (hasta {rotacionFin})
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td>
                             <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
                               {emp.especialidad || "General"}
                             </span>
@@ -641,7 +719,7 @@ const Empleados = () => {
                               {emp.activo ? "Activo" : "Inactivo"}
                             </Badge>
                           </td>
-                          {isAdmin && (
+                          {esSuperOAdmin && (
                             <td style={{ textAlign: "right" }}>
                               <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
                                 {puedeAsignarSede && (
@@ -649,7 +727,7 @@ const Empleados = () => {
                                     type="button"
                                     className="btn-icon"
                                     onClick={() => handleOpenAsignacionModal(emp)}
-                                    title="Asignar o rotar de sede"
+                                    title="Programar rotación de sede"
                                     style={{ color: "var(--color-accent)" }}
                                   >
                                     <MapPin size={16} />
@@ -687,7 +765,7 @@ const Empleados = () => {
       )}
 
       {/* =========================================================================
-          SUB-TAB 2: ASIGNACIONES Y ROTACIONES DE SEDE
+          SUB-TAB 2: ROTACIÓN DE PERSONAL
           ========================================================================= */}
       {activeSubTab === "asignaciones" && (
         <>
@@ -697,23 +775,21 @@ const Empleados = () => {
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                 <Building2 size={18} style={{ color: "var(--color-brand-primary)" }} />
                 <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: "var(--text-main)" }}>
-                  Rotación y desplazamiento de personal operativo entre sedes
+                  Rotación de Personal entre Sedes
                 </h3>
               </div>
               <p className="prose-limit" style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
-                Se puede asignar sede fija o rotación temporal a todo el personal operativo (Recepcionistas, Instructores, etc.), excepto Administradores y Supervisores que cuentan con alcance global.
+                Aquí se gestionan exclusivamente los desplazamientos temporales por días o semanas. Todo el personal operativo puede rotar (los instructores o recepcionistas pueden rotarse ellos mismos; Administradores y Supervisores pueden rotar a cualquier colaborador).
               </p>
             </div>
-            {isAdmin && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => handleOpenAsignacionModal(null)}
-              >
-                <MapPin size={15} />
-                Nueva Asignación
-              </button>
-            )}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => handleOpenAsignacionModal(null)}
+            >
+              <MapPin size={15} />
+              Nueva Rotación
+            </button>
           </div>
 
           {/* FILTERS */}
@@ -730,7 +806,7 @@ const Empleados = () => {
             <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "flex-end" }}>
               <div style={{ minWidth: "200px" }}>
                 <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
-                  Filtrar por Sede:
+                  Filtrar por Sede de Destino:
                 </label>
                 <select
                   className="form-control"
@@ -755,7 +831,7 @@ const Empleados = () => {
                   value={filtroEmpleadoAsignacion}
                   onChange={(e) => setFiltroEmpleadoAsignacion(e.target.value)}
                 >
-                  <option value="">Todos los colaboradores asignables</option>
+                  <option value="">Todos los colaboradores</option>
                   {empleados
                     .filter((e) => esRolAsignableASede(e))
                     .map((e) => (
@@ -787,41 +863,41 @@ const Empleados = () => {
                 className={`nav-pill ${filtroEstadoAsignacion === "VIGENTES" ? "active" : ""}`}
                 onClick={() => setFiltroEstadoAsignacion("VIGENTES")}
               >
-                Vigentes ({totalVigentes})
+                Rotaciones Vigentes ({totalRotacionesVigentes})
               </button>
               <button
                 type="button"
                 className={`nav-pill ${filtroEstadoAsignacion === "HISTORIAL" ? "active" : ""}`}
                 onClick={() => setFiltroEstadoAsignacion("HISTORIAL")}
               >
-                Finalizadas / Anuladas ({totalHistorial})
+                Historial Finalizadas ({totalRotacionesHistorial})
               </button>
               <button
                 type="button"
                 className={`nav-pill ${filtroEstadoAsignacion === "TODAS" ? "active" : ""}`}
                 onClick={() => setFiltroEstadoAsignacion("TODAS")}
               >
-                Todas ({asignaciones.length})
+                Todas ({soloRotaciones.length})
               </button>
             </div>
           </div>
 
           {/* ASSIGNMENTS LIST */}
           {loading ? (
-            <LoadingSpinner text="Cargando asignaciones de sede..." />
-          ) : asignacionesFiltradas.length === 0 ? (
+            <LoadingSpinner text="Cargando rotaciones de personal..." />
+          ) : rotacionesFiltradas.length === 0 ? (
             <EmptyState
               title={
                 filtroEstadoAsignacion === "VIGENTES"
-                  ? "No hay asignaciones vigentes"
-                  : "No se encontraron asignaciones"
+                  ? "No hay rotaciones activas"
+                  : "No se encontraron rotaciones"
               }
               description={
-                filtroEstadoAsignacion === "VIGENTES" && totalHistorial > 0
-                  ? `No hay asignaciones activas con estos filtros. Tienes ${totalHistorial} registro(s) en la vista de "Finalizadas / Anuladas".`
-                  : "Actualmente no hay colaboradores asignados bajo los filtros seleccionados."
+                filtroEstadoAsignacion === "VIGENTES" && totalRotacionesHistorial > 0
+                  ? `No hay rotaciones temporales vigentes actualmente. Tienes ${totalRotacionesHistorial} en el historial.`
+                  : "Todo el personal se encuentra prestando servicios en sus sedes base fijas."
               }
-              actionLabel={isAdmin ? "Nueva Asignación de Sede" : null}
+              actionLabel="Programar Nueva Rotación"
               onAction={() => handleOpenAsignacionModal(null)}
             />
           ) : (
@@ -831,20 +907,21 @@ const Empleados = () => {
                   <thead>
                     <tr>
                       <th style={{ minWidth: "210px" }}>Colaborador</th>
-                      <th style={{ minWidth: "180px" }}>Sede de Trabajo</th>
-                      <th style={{ minWidth: "130px" }}>Fecha de Inicio</th>
-                      <th style={{ minWidth: "150px" }}>Fecha de Cierre</th>
-                      <th style={{ minWidth: "150px" }}>Modalidad</th>
+                      <th style={{ minWidth: "180px" }}>Sede de Rotación</th>
+                      <th style={{ minWidth: "120px" }}>Fecha Inicio</th>
+                      <th style={{ minWidth: "120px" }}>Fecha Término</th>
                       <th style={{ minWidth: "130px" }}>Estado</th>
-                      {isAdmin && <th style={{ minWidth: "190px", textAlign: "right" }}>Gestión</th>}
+                      <th style={{ minWidth: "160px", textAlign: "right" }}>Gestión</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {asignacionesFiltradas.map((asig) => {
+                    {rotacionesFiltradas.map((asig) => {
                       const { esAnulada, tieneFechaFin, esFinalizada, esProgramada, esVigente } =
                         evaluarEstadoAsignacion(asig);
                       const empObj = empleados.find((e) => Number(e.id) === Number(asig.empleadoId));
                       const rolEmp = empObj ? obtenerRolEmpleado(empObj) : null;
+                      const esMio = empObj && (empObj.correo === usuario?.correo || empObj.dni === usuario?.dni || Number(empObj.id) === Number(usuario?.id));
+                      const puedeGestionar = esSuperOAdmin || esMio;
 
                       return (
                         <tr key={asig.id} style={{ opacity: esFinalizada || esAnulada ? 0.72 : 1 }}>
@@ -873,31 +950,9 @@ const Empleados = () => {
                             </div>
                           </td>
                           <td>
-                            <div style={{ fontSize: "13px" }}>
-                              {tieneFechaFin ? (
-                                <span
-                                  style={{
-                                    color: esFinalizada ? "var(--text-muted)" : "var(--color-warning)",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {asig.fechaHasta}
-                                </span>
-                              ) : (
-                                <span style={{ color: "var(--color-success)", fontWeight: 500 }}>
-                                  Indefinida (Sede Fija)
-                                </span>
-                              )}
+                            <div style={{ fontSize: "13px", fontWeight: 500, color: esFinalizada ? "var(--text-muted)" : "var(--color-warning)" }}>
+                              {asig.fechaHasta}
                             </div>
-                          </td>
-                          <td>
-                            <Badge variant={tieneFechaFin ? "info" : "purple"}>
-                              {esFinalizada
-                                ? "Ciclo Cerrado"
-                                : tieneFechaFin
-                                ? "Rotación Temporal"
-                                : "Sede Principal"}
-                            </Badge>
                           </td>
                           <td>
                             {esAnulada ? (
@@ -910,34 +965,34 @@ const Empleados = () => {
                               <Badge variant="success">Vigente</Badge>
                             )}
                           </td>
-                          {isAdmin && (
-                            <td style={{ textAlign: "right" }}>
-                              {esVigente ? (
-                                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => handleFinalizarAsignacion(asig)}
-                                    title="Dar por terminada esta asignación hoy"
-                                  >
-                                    Finalizar
-                                  </button>
+                          <td style={{ textAlign: "right" }}>
+                            {puedeGestionar && esVigente ? (
+                              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handleFinalizarAsignacion(asig)}
+                                  title="Dar por culminada la rotación y regresar a la sede base"
+                                >
+                                  Finalizar
+                                </button>
+                                {esSuperOAdmin && (
                                   <button
                                     type="button"
                                     className="btn btn-danger btn-sm"
                                     onClick={() => handleAnularAsignacion(asig.id)}
-                                    title="Anular registro de asignación"
+                                    title="Anular rotación"
                                   >
                                     Anular
                                   </button>
-                                </div>
-                              ) : (
-                                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                                  {esAnulada ? "Registro anulado" : `Cerrada (${asig.fechaHasta})`}
-                                </span>
-                              )}
-                            </td>
-                          )}
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                                {esAnulada ? "Registro anulado" : esFinalizada ? `Culminada (${asig.fechaHasta})` : "Sin acciones"}
+                              </span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -1092,12 +1147,12 @@ const Empleados = () => {
       </Modal>
 
       {/* =========================================================================
-          MODAL: NUEVA ASIGNACION / ROTACION DE SEDE
+          MODAL: PROGRAMAR ROTACIÓN DE PERSONAL
           ========================================================================= */}
       <Modal
         isOpen={modalAsignacionOpen}
         onClose={() => setModalAsignacionOpen(false)}
-        title="Asignar Colaborador a Sede (Rotación / Sede Fija)"
+        title="Programar Rotación Temporal de Personal"
         footer={
           <>
             <button
@@ -1114,7 +1169,7 @@ const Empleados = () => {
               onClick={handleSaveAsignacion}
               disabled={savingAsignacion}
             >
-              {savingAsignacion ? "Guardando..." : "Confirmar Asignación"}
+              {savingAsignacion ? "Guardando..." : "Confirmar Rotación"}
             </button>
           </>
         }
@@ -1122,9 +1177,9 @@ const Empleados = () => {
         {errorAsignacion && <div className="alert alert-danger">{errorAsignacion}</div>}
 
         <div className="prose-limit" style={{ background: "var(--bg-surface-elevated)", padding: "12px 16px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", marginBottom: "16px", fontSize: "13px" }}>
-          <strong style={{ color: "var(--text-main)", fontWeight: 600 }}>Modalidad de asignación</strong>
+          <strong style={{ color: "var(--text-main)", fontWeight: 600 }}>Rotación temporal simplificada</strong>
           <p style={{ margin: "4px 0 0 0", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-            Si dejas la <strong>Fecha Límite en blanco</strong>, el colaborador queda asignado de forma fija a esa sede. Si estableces una fecha fin, actuará como una rotación temporal. (Se incluyen todos los roles operativos excepto Administrador y Supervisor).
+            Selecciona la fecha de inicio y la duración de la rotación (1 día, 2 días, 1 semana, etc.). El sistema calculará automáticamente la fecha fin y reincorporará al colaborador a su sede base al culminar el plazo.
           </p>
         </div>
 
@@ -1134,6 +1189,7 @@ const Empleados = () => {
             <select
               className="form-control"
               required
+              disabled={!esSuperOAdmin}
               value={formAsignacion.empleadoId}
               onChange={(e) => setFormAsignacion({ ...formAsignacion, empleadoId: e.target.value })}
             >
@@ -1144,17 +1200,22 @@ const Empleados = () => {
                 </option>
               ))}
             </select>
+            {!esSuperOAdmin && (
+              <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
+                Como colaborador, solo puedes programar tu propia rotación de sede.
+              </span>
+            )}
           </div>
 
           <div className="form-group">
-            <label className="form-label">Sede de Destino *</label>
+            <label className="form-label">Sede de Destino para la Rotación *</label>
             <select
               className="form-control"
               required
               value={formAsignacion.sedeId}
               onChange={(e) => setFormAsignacion({ ...formAsignacion, sedeId: e.target.value })}
             >
-              <option value="">-- Selecciona una sede --</option>
+              <option value="">-- Selecciona sede de rotación --</option>
               {sedes
                 .filter((s) => s.activa)
                 .map((s) => (
@@ -1173,18 +1234,55 @@ const Empleados = () => {
                 required
                 className="form-control"
                 value={formAsignacion.fechaDesde}
-                onChange={(e) => setFormAsignacion({ ...formAsignacion, fechaDesde: e.target.value })}
+                onChange={(e) => handleFechaDesdeChange(e.target.value)}
               />
             </div>
+
             <div className="form-group">
-              <label className="form-label">Fecha Límite (Opcional para rotación)</label>
-              <input
-                type="date"
+              <label className="form-label">Duración de la Rotación *</label>
+              <select
                 className="form-control"
-                value={formAsignacion.fechaHasta}
-                onChange={(e) => setFormAsignacion({ ...formAsignacion, fechaHasta: e.target.value })}
-              />
+                value={formAsignacion.duracionOpcion || "1"}
+                onChange={(e) => handleDuracionChange(e.target.value)}
+              >
+                <option value="1">1 día (Turno diario)</option>
+                <option value="2">2 días</option>
+                <option value="3">3 días</option>
+                <option value="7">1 semana (7 días)</option>
+                <option value="15">15 días (Quincena)</option>
+                <option value="30">1 mes (30 días)</option>
+                <option value="custom">Personalizado (Elegir fecha fin)</option>
+              </select>
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Fecha Término de Rotación *</label>
+            <input
+              type="date"
+              required
+              readOnly={formAsignacion.duracionOpcion !== "custom"}
+              className="form-control"
+              style={formAsignacion.duracionOpcion !== "custom" ? { background: "var(--bg-surface-elevated)", color: "var(--text-main)", cursor: "not-allowed" } : {}}
+              value={formAsignacion.fechaHasta}
+              onChange={(e) => setFormAsignacion({ ...formAsignacion, fechaHasta: e.target.value })}
+            />
+            {formAsignacion.fechaDesde && formAsignacion.fechaHasta && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "rgba(16, 185, 129, 0.08)",
+                  border: "1px solid rgba(16, 185, 129, 0.25)",
+                  fontSize: "12.5px",
+                  color: "var(--color-brand-primary)",
+                  fontWeight: 500,
+                }}
+              >
+                📅 La rotación inicia el <strong>{formAsignacion.fechaDesde}</strong> y culmina el <strong>{formAsignacion.fechaHasta} a las 00:00</strong>. Al finalizar, regresa automáticamente a su sede base.
+              </div>
+            )}
           </div>
         </form>
       </Modal>

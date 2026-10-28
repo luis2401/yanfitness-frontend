@@ -54,7 +54,7 @@ const Topbar = ({
 
   const titles = {
     dashboard: { title: "Resumen Operativo", subtitle: "Estado general de membresías, asistencia y recaudación" },
-    socios: { title: "Directorio de Socios", subtitle: "Padrón de miembros registrados y estado de cuenta" },
+    socios: { title: "Directorio de Socios", subtitle: "Registro de miembros y estado de cuenta" },
     suscripciones: { title: "Membresías", subtitle: "Control de vigencias, renovaciones y accesos por sede" },
     caja: { title: "Caja y Pagos", subtitle: "Registro de cobros, pases diarios y arqueo de turno" },
     clases: { title: "Clases y Horarios", subtitle: "Programación semanal, cupos y lista de asistencia" },

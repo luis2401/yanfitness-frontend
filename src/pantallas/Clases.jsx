@@ -36,7 +36,13 @@ const DIAS_SEMANA = [
 ];
 
 const Clases = () => {
-  const { isAdmin, showToast } = useAuth();
+  const { usuario, isAdmin, showToast } = useAuth();
+  const esInstructor = usuario?.rol === "INSTRUCTOR";
+  const esSupervisor = usuario?.rol === "SUPERVISOR";
+  const esAdminOSupervisor = isAdmin || esSupervisor;
+  const puedeInscribirYAsistencia = esInstructor || esAdminOSupervisor;
+  const puedeAdministrarClase = esInstructor || esAdminOSupervisor;
+
   const [clases, setClases] = useState([]);
   const [sedes, setSedes] = useState([]);
   const [instructores, setInstructores] = useState([]);
@@ -504,26 +510,34 @@ const Clases = () => {
                   }}
                 >
                   <div style={{ display: "flex", gap: "6px" }}>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => handleOpenInscribir(clase)}
-                      disabled={!clase.activo || (clase.inscritos || 0) >= (clase.cupoMax || 0)}
-                    >
-                      <Users size={14} />
-                      Inscribir
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleOpenAsistencia(clase)}
-                    >
-                      <CheckCircle size={14} />
-                      Asistencia
-                    </button>
+                    {puedeInscribirYAsistencia ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleOpenInscribir(clase)}
+                          disabled={!clase.activo || (clase.inscritos || 0) >= (clase.cupoMax || 0)}
+                        >
+                          <Users size={14} />
+                          Inscribir
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleOpenAsistencia(clase)}
+                        >
+                          <CheckCircle size={14} />
+                          Asistencia
+                        </button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                        Gestión por instructor
+                      </span>
+                    )}
                   </div>
 
-                  {isAdmin && (
+                  {puedeAdministrarClase && (
                     <div style={{ display: "flex", gap: "6px" }}>
                       <button
                         type="button"
