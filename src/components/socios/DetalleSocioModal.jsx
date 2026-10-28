@@ -19,11 +19,28 @@ const DetalleSocioModal = ({
     if (socio?.id && isOpen) {
       setLoadingExtra(true);
       Promise.all([
-        suscripcionesService.obtenerVigenteDeSocio(socio.id).catch(() => null),
+        suscripcionesService.listar({ socioId: socio.id, estado: "ACTIVA" }).catch(() => []),
         inscripcionesService.obtenerPorSocio(socio.id).catch(() => []),
       ])
-        .then(([sub, clss]) => {
-          setSuscripcionVigente(sub);
+        .then(([subsData, clss]) => {
+          const lista = Array.isArray(subsData) ? subsData : subsData?.content || [];
+          const hoy = new Date();
+          const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(
+            hoy.getDate()
+          ).padStart(2, "0")}`;
+          const vigentes = lista.filter((s) => s.estado === "ACTIVA" && (!s.fechaFin || s.fechaFin >= hoyStr));
+          if (vigentes.length > 0) {
+            const masLejana = vigentes.reduce((max, cur) => (cur.fechaFin > max.fechaFin ? cur : max), vigentes[0]);
+            const masAntigua = vigentes.reduce((min, cur) => (cur.fechaInicio < min.fechaInicio ? cur : min), vigentes[0]);
+            setSuscripcionVigente({
+              ...masLejana,
+              fechaInicio: masAntigua.fechaInicio,
+              fechaFin: masLejana.fechaFin,
+              cantidadPlanesEncadenados: vigentes.length,
+            });
+          } else {
+            setSuscripcionVigente(null);
+          }
           setInscripciones(clss || []);
         })
         .finally(() => setLoadingExtra(false));

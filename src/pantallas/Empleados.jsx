@@ -164,12 +164,21 @@ const Empleados = () => {
       setErrorMsg("El DNI debe tener exactamente 8 dígitos numéricos.");
       return;
     }
-    if (!form.nombre.trim()) {
-      setErrorMsg("El nombre del colaborador es obligatorio.");
+    if (
+      !empleadoAEditar &&
+      empleados.some((emp) => emp.dni && emp.dni.trim() === form.dni.trim())
+    ) {
+      setErrorMsg(
+        `Ya se encuentra registrado un colaborador con el DNI ${form.dni.trim()}. Verifica el documento en el directorio.`
+      );
       return;
     }
-    if (!form.apellido.trim()) {
-      setErrorMsg("El apellido del colaborador es obligatorio.");
+    if (!form.nombre.trim() || form.nombre.trim().length < 2) {
+      setErrorMsg("El nombre del colaborador es obligatorio (mínimo 2 caracteres).");
+      return;
+    }
+    if (!form.apellido.trim() || form.apellido.trim().length < 2) {
+      setErrorMsg("El apellido del colaborador es obligatorio (mínimo 2 caracteres).");
       return;
     }
     if (!form.rolId) {
@@ -181,7 +190,19 @@ const Empleados = () => {
       return;
     }
     if (form.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.correo.trim())) {
-      setErrorMsg("El correo electrónico no tiene un formato válido (ejemplo: usuario@correo.com).");
+      setErrorMsg("El correo electrónico debe tener el formato usuario@correo.com.");
+      return;
+    }
+    if (
+      form.correo &&
+      empleados.some(
+        (emp) =>
+          emp.correo &&
+          emp.correo.trim().toLowerCase() === form.correo.trim().toLowerCase() &&
+          (!empleadoAEditar || Number(emp.id) !== Number(empleadoAEditar.id))
+      )
+    ) {
+      setErrorMsg("El correo electrónico ingresado ya está vinculado a otro colaborador.");
       return;
     }
 

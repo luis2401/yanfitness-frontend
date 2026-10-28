@@ -5,6 +5,7 @@ import {
   empleadosService,
   sociosService,
   inscripcionesService,
+  suscripcionesService,
 } from "../api/apiClient";
 import { useAuth } from "../context/AuthContext";
 import Badge from "../components/common/Badge";
@@ -63,6 +64,9 @@ const Clases = () => {
   const [socios, setSocios] = useState([]);
   const [socioSeleccionado, setSocioSeleccionado] = useState("");
   const [savingInscripcion, setSavingInscripcion] = useState(false);
+  const [inscritosEnClaseActual, setInscritosEnClaseActual] = useState([]);
+  const [suscripcionesActivas, setSuscripcionesActivas] = useState([]);
+  const [avisoInscripcion, setAvisoInscripcion] = useState("");
 
   // Modal Attendees & Attendance
   const [modalAsistenciaOpen, setModalAsistenciaOpen] = useState(false);
@@ -192,22 +196,90 @@ const Clases = () => {
   // Enroll Socio
   const handleOpenInscribir = async (clase) => {
     setClaseParaInscribir(clase);
+    setAvisoInscripcion("");
     try {
-      const sociosData = await sociosService.listar();
+      const [sociosData, inscritosData, subsData] = await Promise.all([
+        sociosService.listar().catch(() => []),
+        clasesService.obtenerInscripciones(clase.id, true).catch(() => []),
+        suscripcionesService.listar({ estado: "ACTIVA" }).catch(() => []),
+      ]);
       const lista = Array.isArray(sociosData) ? sociosData : sociosData?.content || [];
+      const inscritos = Array.isArray(inscritosData) ? inscritosData : [];
+      const subs = Array.isArray(subsData) ? subsData : subsData?.content || [];
+
+      setInscritosEnClaseActual(inscritos);
+      setSuscripcionesActivas(subs);
+
       const activos = lista.filter((s) => s.activo);
       const mostrar = activos.length > 0 ? activos : lista;
       setSocios(mostrar);
-      setSocioSeleccionado(mostrar?.[0]?.id || "");
+
+      // Seleccionar por defecto al primer socio elegible que aún no esté inscrito
+      const elegible = mostrar.find(
+        (s) => !inscritos.some((i) => Number(i.socioId) === Number(s.id))
+      );
+      setSocioSeleccionado((elegible || mostrar?.[0])?.id || "");
     } catch {
       setSocios([]);
     }
     setModalInscribirOpen(true);
   };
 
+  const evaluarElegibilidadSocioEnClase = (socioIdVal) => {
+    if (!claseParaInscribir || !socioIdVal) return { ok: true, msg: "" };
+    const idNum = Number(socioIdVal);
+    if (inscritosEnClaseActual.some((i) => Number(i.socioId) === idNum)) {
+      return {
+        ok: false,
+        yaInscrito: true,
+        msg: "Este socio ya se encuentra inscrito actualmente en esta clase.",
+      };
+    }
+    const subsDelSocio = suscripcionesActivas.filter(
+      (s) => Number(s.socioId || s.socio?.id) === idNum && s.estado === "ACTIVA"
+    );
+    if (subsDelSocio.length === 0) {
+      return {
+        ok: false,
+        msg: "Este socio no cuenta con una membresía activa vigente. Actívale un plan desde el módulo de Membresías o Socios antes de inscribirlo.",
+      };
+    }
+    const cubreSede = subsDelSocio.some(
+      (s) =>
+        Boolean(s.accesoMultisede) ||
+        Number(s.sedeId || s.sedeInscripcion?.id) === Number(claseParaInscribir.sedeId) ||
+        (s.sedeNombre &&
+          claseParaInscribir.sedeNombre &&
+          s.sedeNombre.toLowerCase() === claseParaInscribir.sedeNombre.toLowerCase())
+    );
+    if (!cubreSede) {
+      const sedeSocio = subsDelSocio[0]?.sedeNombre || "otra sede";
+      return {
+        ok: false,
+        msg: `La membresía actual de este socio pertenece a ${sedeSocio} (sin acceso Multisede) y esta clase se dicta en ${
+          claseParaInscribir.sedeNombre || "esta sede"
+        }.`,
+      };
+    }
+    return { ok: true, msg: "" };
+  };
+
   const handleInscribirSocio = async (e) => {
     e.preventDefault();
     if (!claseParaInscribir || !socioSeleccionado) return;
+    setAvisoInscripcion("");
+
+    const check = evaluarElegibilidadSocioEnClase(socioSeleccionado);
+    if (!check.ok) {
+      if (check.yaInscrito) {
+        showToast("El socio ya forma parte de la lista de inscritos de esta clase.", "info");
+        setModalInscribirOpen(false);
+        return;
+      }
+      setAvisoInscripcion(check.msg);
+      return;
+    }
+
     setSavingInscripcion(true);
     try {
       await inscripcionesService.inscribir(
@@ -218,7 +290,7 @@ const Clases = () => {
       setModalInscribirOpen(false);
       cargarDatos();
     } catch (err) {
-      showToast(err.message || "Error al inscribir socio", "error");
+      setAvisoInscripcion(err.message || "No se pudo completar la inscripción en la clase.");
     } finally {
       setSavingInscripcion(false);
     }
@@ -656,10 +728,18 @@ const Clases = () => {
           }
         >
           <form onSubmit={handleInscribirSocio}>
+            {avisoInscripcion && (
+              <div className="notice-box notice-box-warning">
+                <span>ℹ️</span>
+                <span>{avisoInscripcion}</span>
+              </div>
+            )}
+
             <div style={{ marginBottom: "16px", fontSize: "13.5px" }}>
               Clase: <strong>{claseParaInscribir.nombre}</strong> (
               {DIAS_SEMANA[(claseParaInscribir.diaSemana || 1) - 1]} {claseParaInscribir.horaInicio} a{" "}
-              {claseParaInscribir.horaFin})
+              {claseParaInscribir.horaFin}) • Sede:{" "}
+              <strong>{claseParaInscribir.sedeNombre || "Principal"}</strong>
             </div>
 
             <div className="form-group">
@@ -667,14 +747,24 @@ const Clases = () => {
               <select
                 className="form-control"
                 value={socioSeleccionado}
-                onChange={(e) => setSocioSeleccionado(e.target.value)}
+                onChange={(e) => {
+                  setSocioSeleccionado(e.target.value);
+                  const chk = evaluarElegibilidadSocioEnClase(e.target.value);
+                  setAvisoInscripcion(chk.ok ? "" : chk.msg);
+                }}
                 required
               >
-                {socios.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre} {s.apellido} (DNI: {s.dni})
-                  </option>
-                ))}
+                {socios.map((s) => {
+                  const yaEsta = inscritosEnClaseActual.some(
+                    (i) => Number(i.socioId) === Number(s.id)
+                  );
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre} {s.apellido || ""} (DNI: {s.dni})
+                      {yaEsta ? " — Ya inscrito en esta clase" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </form>

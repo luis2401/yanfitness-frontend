@@ -124,56 +124,59 @@ export const request = async (endpoint, options = {}) => {
       errorMsg = data.trim();
     }
 
-    // Context-aware Spanish fallbacks if backend did not include a detailed message
+    if (errorMsg) {
+      errorMsg = errorMsg.replace(/^regla de negocio:\s*/i, "");
+      errorMsg = errorMsg.charAt(0).toUpperCase() + errorMsg.slice(1);
+    }
+
+    // Mensajes informativos en español según el contexto cuando el servidor no adjunta detalle
     if (!errorMsg) {
       if (response.status === 401) {
-        errorMsg = "Credenciales inválidas. Verifica tu usuario y contraseña.";
+        errorMsg = "Verifica tu usuario y contraseña para iniciar sesión.";
       } else if (response.status === 423) {
-        errorMsg = "Cuenta bloqueada temporalmente por intentos fallidos. Intenta más tarde.";
+        errorMsg = "Esta cuenta se encuentra bloqueada temporalmente por intentos fallidos.";
       } else if (response.status === 403) {
-        errorMsg = "Acceso denegado: tu rol actual no tiene permisos para realizar esta acción.";
+        errorMsg = "Tu rol actual no cuenta con permisos para realizar esta acción.";
       } else if (response.status === 404) {
-        errorMsg = "El registro o servicio solicitado no fue encontrado (Error 404).";
+        errorMsg = "La información solicitada no se encuentra registrada actualmente.";
       } else if (response.status === 400) {
         if (endpoint.includes("/suscripciones")) {
           errorMsg =
-            "No se pudo procesar la suscripción: verifica que el socio esté activo, que la sede tenga un plan con tarifa vigente y, si modificaste el precio de lista, haber ingresado el motivo en la observación.";
+            "Para registrar la membresía, verifica que la sede tenga una tarifa activa asignada y que los importes sean válidos.";
         } else if (endpoint.includes("/inscripciones")) {
           errorMsg =
-            "No se pudo inscribir al socio: verifica que el socio esté activo y cuente con una membresía vigente para la sede de esta clase (o acceso Multisede).";
+            "Para inscribir al socio en esta clase, verifica que cuente con una membresía vigente para esta sede (o con acceso Multisede).";
         } else if (endpoint.includes("/asistencias")) {
           errorMsg =
-            "No se pudo registrar la asistencia: verifica que la inscripción del socio esté activa y la fecha sea válida.";
+            "Verifica que la inscripción del socio en la clase esté activa y que la fecha seleccionada sea válida.";
         } else if (endpoint.includes("/asignaciones")) {
           errorMsg =
-            "Datos de asignación inválidos: verifica que el colaborador y la sede estén activos y que la fecha límite no sea anterior a la fecha de inicio.";
+            "Verifica que el colaborador y la sede estén activos y que la fecha de fin no sea anterior a la fecha de inicio.";
         } else {
-          errorMsg = "Los datos ingresados no cumplen las validaciones requeridas. Revisa los campos del formulario.";
+          errorMsg = "Por favor verifica que todos los campos del formulario estén completos y con el formato indicado.";
         }
       } else if (response.status === 409) {
         if (endpoint.includes("/suscripciones")) {
           errorMsg =
-            "El socio ya cuenta con una membresía activa vigente en esa fecha, o el número de operación ingresado ya fue utilizado.";
+            "El número de operación ingresado ya fue utilizado en otro comprobante, o la suscripción ya se encuentra finalizada.";
         } else if (endpoint.includes("/pagos")) {
-          errorMsg = "El número de operación ingresado ya existe en otro comprobante de pago.";
+          errorMsg = "El número de operación ingresado ya se encuentra registrado en otro comprobante de caja.";
         } else if (endpoint.includes("/asignaciones")) {
           errorMsg =
-            "El colaborador ya tiene una asignación vigente en esa sede para el periodo seleccionado.";
+            "El colaborador ya cuenta con una asignación vigente en esa sede para el periodo indicado.";
         } else if (endpoint.includes("/gimnasio")) {
-          errorMsg = "Ya existe un socio registrado con ese número de DNI o correo electrónico.";
+          errorMsg = "Ya existe un socio registrado con ese DNI o correo, o tiene historial de membresías vinculado.";
         } else if (endpoint.includes("/empleados")) {
-          errorMsg = "Ya existe un colaborador registrado con ese número de DNI.";
+          errorMsg = "Ya existe un colaborador registrado con ese número de DNI o correo electrónico.";
         } else if (endpoint.includes("/clases")) {
-          errorMsg = "El instructor seleccionado ya tiene otra clase asignada en ese mismo día y horario.";
+          errorMsg = "El instructor seleccionado ya tiene otra clase programada en ese mismo día y horario.";
         } else if (endpoint.includes("/inscripciones")) {
-          errorMsg = "El socio ya se encuentra inscrito en esta clase o el cupo máximo está lleno.";
+          errorMsg = "El socio ya se encuentra inscrito en esta clase o se alcanzó el cupo máximo de participantes.";
         } else {
-          errorMsg = "Conflicto de datos: ya existe un registro con esa información o tiene registros vinculados.";
+          errorMsg = "Esta información ya se encuentra registrada en el sistema o tiene operaciones históricas asociadas.";
         }
-      } else if (response.status === 500) {
-        errorMsg = "Ocurrió un error interno al procesar la solicitud. Verifica que todos los campos obligatorios estén completos.";
       } else {
-        errorMsg = `Error al procesar la solicitud (Código ${response.status})`;
+        errorMsg = "Por favor verifica los datos ingresados e inténtalo nuevamente.";
       }
     }
 

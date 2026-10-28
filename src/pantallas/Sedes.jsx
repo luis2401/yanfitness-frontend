@@ -67,12 +67,23 @@ const Sedes = () => {
     e.preventDefault();
     setErrorMsg("");
 
-    if (!form.codigo.trim()) {
-      setErrorMsg("El código de la sede es obligatorio (ej. SEDE-01).");
+    if (!form.codigo.trim() || form.codigo.trim().length < 2) {
+      setErrorMsg("El código de la sede es obligatorio (mínimo 2 caracteres, ej. SEDE-01).");
       return;
     }
-    if (!form.nombre.trim()) {
-      setErrorMsg("El nombre de la sede es obligatorio.");
+    if (
+      sedes.some(
+        (s) =>
+          s.codigo &&
+          s.codigo.trim().toUpperCase() === form.codigo.trim().toUpperCase() &&
+          (!sedeAEditar || Number(s.id) !== Number(sedeAEditar.id))
+      )
+    ) {
+      setErrorMsg(`El código "${form.codigo.trim().toUpperCase()}" ya pertenece a otra sede registrada.`);
+      return;
+    }
+    if (!form.nombre.trim() || form.nombre.trim().length < 2) {
+      setErrorMsg("El nombre de la sede es obligatorio (mínimo 2 caracteres).");
       return;
     }
     if (!form.direccion.trim()) {

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Modal from "../common/Modal";
 import {
   sociosService,
   sedesService,
   planesService,
   suscripcionesService,
+  pagosService,
 } from "../../api/apiClient";
 import { useAuth } from "../../context/AuthContext";
 
@@ -28,6 +29,8 @@ const FormularioSuscripcionModal = ({
   const [sedes, setSedes] = useState([]);
   const [planesSede, setPlanesSede] = useState([]);
   const [masterPlanes, setMasterPlanes] = useState([]);
+  const [suscripcionesActivas, setSuscripcionesActivas] = useState([]);
+  const [pagosExistentes, setPagosExistentes] = useState([]);
 
   const [precioBaseSede, setPrecioBaseSede] = useState(0);
   const [recargoMultisede, setRecargoMultisede] = useState(0);
@@ -38,7 +41,22 @@ const FormularioSuscripcionModal = ({
 
   const getLocalToday = () => {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+  };
+
+  const sumarDiasISO = (fechaIso, dias) => {
+    if (!fechaIso) return getLocalToday();
+    try {
+      const d = new Date(fechaIso + "T00:00:00");
+      d.setDate(d.getDate() + Number(dias));
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate()
+      ).padStart(2, "0")}`;
+    } catch {
+      return fechaIso;
+    }
   };
 
   const [form, setForm] = useState({
@@ -68,6 +86,39 @@ const FormularioSuscripcionModal = ({
       return "";
     }
   };
+
+  const formatearFechaCorta = (isoStr) => {
+    if (!isoStr) return "";
+    try {
+      return new Date(isoStr + "T00:00:00").toLocaleDateString("es-PE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch {
+      return isoStr;
+    }
+  };
+
+  // Obtener la suscripción activa de mayor fechaFin para un socio dado
+  const encontrarUltimaSuscripcionActiva = (socioIdBuscado, listaSubs = suscripcionesActivas) => {
+    if (!socioIdBuscado || !Array.isArray(listaSubs)) return null;
+    const hoy = getLocalToday();
+    const delSocio = listaSubs.filter(
+      (s) =>
+        Number(s.socioId || s.socio?.id) === Number(socioIdBuscado) &&
+        s.estado === "ACTIVA" &&
+        s.fechaFin &&
+        s.fechaFin >= hoy
+    );
+    if (delSocio.length === 0) return null;
+    return delSocio.reduce((max, actual) => (actual.fechaFin > max.fechaFin ? actual : max), delSocio[0]);
+  };
+
+  const suscripcionVigenteSocio = useMemo(
+    () => encontrarUltimaSuscripcionActiva(form.socioId, suscripcionesActivas),
+    [form.socioId, suscripcionesActivas]
+  );
 
   const cargarPlanesDeSede = async (sedeId, planesBase = null) => {
     try {
@@ -122,18 +173,27 @@ const FormularioSuscripcionModal = ({
         sociosService.listar().catch(() => []),
         sedesService.listar(true).catch(() => []),
         planesService.listar(true).catch(() => []),
-      ]).then(([sociosData, sedesData, masterPlanesData]) => {
+        suscripcionesService.listar({ estado: "ACTIVA" }).catch(() => []),
+        pagosService.listar().catch(() => []),
+      ]).then(([sociosData, sedesData, masterPlanesData, subsData, pagosData]) => {
         let sList = Array.isArray(sociosData) ? sociosData : sociosData?.content || [];
         const sedesList = Array.isArray(sedesData) ? sedesData : sedesData?.content || [];
         const mPlanes = Array.isArray(masterPlanesData) ? masterPlanesData : masterPlanesData?.content || [];
+        const aSubs = Array.isArray(subsData) ? subsData : subsData?.content || [];
+        const pList = Array.isArray(pagosData) ? pagosData : pagosData?.content || [];
 
-        if (socioPreseleccionado?.id && !sList.some((s) => Number(s.id) === Number(socioPreseleccionado.id))) {
+        if (
+          socioPreseleccionado?.id &&
+          !sList.some((s) => Number(s.id) === Number(socioPreseleccionado.id))
+        ) {
           sList = [socioPreseleccionado, ...sList];
         }
 
         setSocios(sList);
         setSedes(sedesList);
         setMasterPlanes(mPlanes);
+        setSuscripcionesActivas(aSubs);
+        setPagosExistentes(pList);
 
         const initialSocioId = socioPreseleccionado?.id || (sList?.[0]?.id ?? "");
         const initialSedeId =
@@ -141,11 +201,16 @@ const FormularioSuscripcionModal = ({
             ? sedeTurno.id
             : sedesList?.[0]?.id ?? "";
 
+        const subPrevia = encontrarUltimaSuscripcionActiva(initialSocioId, aSubs);
+        const fechaInicioSugerida = subPrevia?.fechaFin ? subPrevia.fechaFin : getLocalToday();
+
         setForm((prev) => ({
           ...prev,
           socioId: initialSocioId,
           sedeId: initialSedeId,
-          fechaInicio: getLocalToday(),
+          fechaInicio: fechaInicioSugerida,
+          observacionPrecio: "",
+          numeroOperacion: "",
         }));
 
         if (initialSedeId) {
@@ -197,13 +262,27 @@ const FormularioSuscripcionModal = ({
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+
+    if (name === "socioId") {
+      const subPrevia = encontrarUltimaSuscripcionActiva(value, suscripcionesActivas);
+      const nuevaFechaInicio = subPrevia?.fechaFin ? subPrevia.fechaFin : getLocalToday();
+      setForm((prev) => ({
+        ...prev,
+        socioId: value,
+        fechaInicio: nuevaFechaInicio,
+      }));
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }));
+    }
 
     if (fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+    if (errorMsg) {
+      setErrorMsg("");
     }
   };
 
@@ -211,15 +290,15 @@ const FormularioSuscripcionModal = ({
     const errors = {};
 
     if (!form.socioId) {
-      errors.socioId = "Debes seleccionar un socio beneficiario.";
+      errors.socioId = "Selecciona un socio beneficiario.";
     }
 
     if (!form.sedeId) {
-      errors.sedeId = "Debes seleccionar una sede.";
+      errors.sedeId = "Selecciona una sede base.";
     }
 
     if (!form.planSedeId) {
-      errors.planSedeId = "Debes seleccionar un plan de membresía.";
+      errors.planSedeId = "Selecciona un plan de membresía.";
     }
 
     if (!form.fechaInicio) {
@@ -228,7 +307,17 @@ const FormularioSuscripcionModal = ({
 
     const precioNum = Number(form.precioVendido);
     if (!form.precioVendido || isNaN(precioNum) || precioNum <= 0) {
-      errors.precioVendido = "El precio a cobrar debe ser un monto numérico mayor a S/ 0.00.";
+      errors.precioVendido = "El importe a cobrar debe ser mayor a S/ 0.00.";
+    }
+
+    const nroOp = (form.numeroOperacion || "").trim();
+    if (
+      nroOp &&
+      pagosExistentes.some(
+        (p) => p.numeroOperacion && p.numeroOperacion.trim().toLowerCase() === nroOp.toLowerCase()
+      )
+    ) {
+      errors.numeroOperacion = `El número de operación "${nroOp}" ya fue registrado en otro comprobante.`;
     }
 
     setFieldErrors(errors);
@@ -241,13 +330,28 @@ const FormularioSuscripcionModal = ({
       ? socioPreseleccionado
       : null);
 
+  const planSeleccionado = planesSede.find(
+    (p) => Number(p.id) === Number(form.planSedeId)
+  );
+
+  // Si el socio tiene membresía vigente, la fecha efectiva de inicio será su último día de suscripción (o posterior si el usuario eligió más adelante)
+  const fechaInicioEfectiva = useMemo(() => {
+    if (suscripcionVigenteSocio?.fechaFin) {
+      if (!form.fechaInicio || form.fechaInicio < suscripcionVigenteSocio.fechaFin) {
+        return suscripcionVigenteSocio.fechaFin;
+      }
+    }
+    return form.fechaInicio || getLocalToday();
+  }, [form.fechaInicio, suscripcionVigenteSocio]);
+
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setErrorMsg("");
 
     const errors = validarFormulario();
     if (Object.keys(errors).length > 0) {
-      setErrorMsg("Por favor completa los campos obligatorios señalados en rojo.");
+      const primerMensaje = Object.values(errors)[0];
+      setErrorMsg(primerMensaje || "Revisa los campos resaltados antes de continuar.");
       return;
     }
 
@@ -263,39 +367,60 @@ const FormularioSuscripcionModal = ({
       const precioCobrado = Number(form.precioVendido);
       const difiereDeLista =
         precioEsperadoLista > 0 && Math.abs(precioCobrado - precioEsperadoLista) > 0.009;
+
       const observacionFinal =
         form.observacionPrecio.trim() ||
         (difiereDeLista
           ? `Ajuste de tarifa en caja (Precio lista: S/ ${precioEsperadoLista.toFixed(2)})`
+          : suscripcionVigenteSocio
+          ? `Extensión continua desde último día de membresía (${suscripcionVigenteSocio.fechaFin})`
           : null);
 
-      await suscripcionesService.crear({
+      const payload = {
         socioId: Number(form.socioId),
         planSedeId: Number(form.planSedeId),
-        fechaInicio: form.fechaInicio || null,
+        fechaInicio: fechaInicioEfectiva,
         accesoMultisede: Boolean(form.accesoMultisede),
         precioVendido: precioCobrado,
         observacionPrecio: observacionFinal,
         metodoPago: form.metodoPago,
         numeroOperacion: form.numeroOperacion.trim() || null,
-      });
+      };
 
-      showToast("Membresía registrada y socio activado exitosamente", "success");
+      try {
+        await suscripcionesService.crear(payload);
+      } catch (firstErr) {
+        // Fallback preventivo si el servidor aún está aplicando el despliegue y requiere +1 día sobre fechaFin
+        if (firstErr?.status === 409 && suscripcionVigenteSocio?.fechaFin) {
+          await suscripcionesService.crear({
+            ...payload,
+            fechaInicio: sumarDiasISO(suscripcionVigenteSocio.fechaFin, 1),
+          });
+        } else {
+          throw firstErr;
+        }
+      }
+
+      if (suscripcionVigenteSocio) {
+        showToast(
+          `Membresía renovada: se sumaron +${planSeleccionado?.duracionDias || 30} días a partir del ${formatearFechaCorta(
+            suscripcionVigenteSocio.fechaFin
+          )}`,
+          "success"
+        );
+      } else {
+        showToast("Membresía registrada y socio activado exitosamente", "success");
+      }
       onSuccess();
     } catch (err) {
-      // Si falló la venta y el socio estaba originalmente inactivo, revertimos su estado a inactivo
-      if (estabaInactivo) {
+      if (estabaInactivo && !suscripcionVigenteSocio) {
         await sociosService.cambiarEstado(Number(form.socioId), false).catch(() => {});
       }
-      setErrorMsg(err.message || "Error al registrar la suscripción.");
+      setErrorMsg(err.message || "No se pudo completar el registro de la suscripción.");
     } finally {
       setLoading(false);
     }
   };
-
-  const planSeleccionado = planesSede.find(
-    (p) => Number(p.id) === Number(form.planSedeId)
-  );
 
   return (
     <Modal
@@ -315,7 +440,9 @@ const FormularioSuscripcionModal = ({
             onClick={onClose}
             disabled={loading}
           >
-            {socioPreseleccionado ? "Dejar sin membresía (Inactivo)" : "Cancelar"}
+            {socioPreseleccionado && !socioActualObj?.activo
+              ? "Dejar sin membresía (Inactivo)"
+              : "Cancelar"}
           </button>
           <button
             type="button"
@@ -323,32 +450,50 @@ const FormularioSuscripcionModal = ({
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading ? "Procesando cobro..." : "Cobrar y Activar Membresía"}
+            {loading
+              ? "Procesando cobro..."
+              : suscripcionVigenteSocio
+              ? `Cobrar y Sumar +${planSeleccionado?.duracionDias || 30} Días`
+              : "Cobrar y Activar Membresía"}
           </button>
         </>
       }
     >
       <form onSubmit={handleSubmit} noValidate>
         {errorMsg && (
-          <div
-            style={{
-              padding: "10px 14px",
-              backgroundColor: "var(--color-danger-bg)",
-              color: "var(--color-danger-text)",
-              border: "1px solid var(--color-danger-border)",
-              borderRadius: "var(--radius-md)",
-              fontSize: "13px",
-              marginBottom: "16px",
-              fontWeight: 500,
-            }}
-          >
-            {errorMsg}
+          <div className="notice-box notice-box-warning">
+            <span>ℹ️</span>
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* AVISO INFORMATIVO AUTOMÁTICO CUANDO EL SOCIO YA TIENE MEMBRESÍA ACTIVA */}
+        {suscripcionVigenteSocio && (
+          <div className="notice-box notice-box-emerald">
+            <span style={{ fontSize: "16px", lineHeight: 1.2 }}>✨</span>
+            <div>
+              <div style={{ fontWeight: 600, color: "#6ee7b7", marginBottom: "2px" }}>
+                Extensión Continua de Membresía Detectada
+              </div>
+              <div style={{ fontSize: "12.5px", color: "#d1fae5" }}>
+                El socio ya cuenta con el plan <strong>{suscripcionVigenteSocio.nombrePlanVendido}</strong> vigente hasta el{" "}
+                <strong>{formatearFechaCorta(suscripcionVigenteSocio.fechaFin)}</strong>. El nuevo plan tomará automáticamente ese último día y sumará{" "}
+                <strong>+{planSeleccionado?.duracionDias || 30} días</strong>, extendiendo su cobertura hasta el{" "}
+                <strong>
+                  {calcularFechaFin(
+                    fechaInicioEfectiva,
+                    planSeleccionado?.duracionDias || 30
+                  )}
+                </strong>.
+              </div>
+            </div>
           </div>
         )}
 
         {/* RESUMEN DEL SOCIO SELECCIONADO / RECIÉN REGISTRADO */}
         {socioActualObj && (
           <div
+            className="info-banner-animated"
             style={{
               background: "var(--bg-surface-elevated)",
               border: "1px solid var(--border-light)",
@@ -363,28 +508,71 @@ const FormularioSuscripcionModal = ({
             }}
           >
             <div>
-              <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
                 Datos del Socio
               </div>
-              <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)", marginTop: "2px" }}>
+              <div
+                style={{
+                  fontSize: "15px",
+                  fontWeight: 600,
+                  color: "var(--text-main)",
+                  marginTop: "2px",
+                }}
+              >
                 {socioActualObj.nombre} {socioActualObj.apellido || ""}
               </div>
-              <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "4px" }}>
-                <span>DNI: <strong>{socioActualObj.dni}</strong></span>
+              <div
+                style={{
+                  fontSize: "12.5px",
+                  color: "var(--text-secondary)",
+                  display: "flex",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                  marginTop: "4px",
+                }}
+              >
+                <span>
+                  DNI: <strong>{socioActualObj.dni}</strong>
+                </span>
                 {socioActualObj.telefono && <span>Tel: {socioActualObj.telefono}</span>}
                 {socioActualObj.correo && <span>{socioActualObj.correo}</span>}
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: "6px",
+              }}
+            >
               <span
-                className={`badge ${socioActualObj.activo ? "badge-success" : "badge-warning"}`}
+                className={`badge ${
+                  suscripcionVigenteSocio
+                    ? "badge-info"
+                    : socioActualObj.activo
+                    ? "badge-success"
+                    : "badge-warning"
+                }`}
                 style={{ fontSize: "11.5px" }}
               >
-                {socioActualObj.activo ? "Socio Activo" : "Inactivo · Se activará al cobrar"}
+                {suscripcionVigenteSocio
+                  ? `Vigente hasta ${formatearFechaCorta(suscripcionVigenteSocio.fechaFin)} · Se sumará el plan`
+                  : socioActualObj.activo
+                  ? "Socio Activo"
+                  : "Inactivo · Se activará al cobrar"}
               </span>
 
-              {onSwitchToPaseDiario && (
+              {onSwitchToPaseDiario && !suscripcionVigenteSocio && (
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -409,14 +597,22 @@ const FormularioSuscripcionModal = ({
             disabled={Boolean(socioPreseleccionado)}
           >
             <option value="">-- Seleccionar socio --</option>
-            {socios.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre} {s.apellido || ""} (DNI: {s.dni}) — {s.activo ? "Activo" : "Inactivo"}
-              </option>
-            ))}
+            {socios.map((s) => {
+              const subS = encontrarUltimaSuscripcionActiva(s.id, suscripcionesActivas);
+              return (
+                <option key={s.id} value={s.id}>
+                  {s.nombre} {s.apellido || ""} (DNI: {s.dni}) —{" "}
+                  {subS
+                    ? `Con plan hasta ${formatearFechaCorta(subS.fechaFin)}`
+                    : s.activo
+                    ? "Activo"
+                    : "Inactivo"}
+                </option>
+              );
+            })}
           </select>
           {fieldErrors.socioId && (
-            <span className="field-error-text">⚠️ {fieldErrors.socioId}</span>
+            <span className="field-error-text">ℹ️ {fieldErrors.socioId}</span>
           )}
         </div>
 
@@ -437,7 +633,7 @@ const FormularioSuscripcionModal = ({
               ))}
             </select>
             {fieldErrors.sedeId && (
-              <span className="field-error-text">⚠️ {fieldErrors.sedeId}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.sedeId}</span>
             )}
           </div>
 
@@ -457,14 +653,14 @@ const FormularioSuscripcionModal = ({
                   const pVal = p.precioActual ?? p.precioLista ?? 0;
                   return (
                     <option key={p.id} value={p.id}>
-                      {p.planNombre} ({p.duracionDias} días de vigencia) — Tarifa: S/ {Number(pVal).toFixed(2)}
+                      {p.planNombre} (+{p.duracionDias} días) — Tarifa: S/ {Number(pVal).toFixed(2)}
                     </option>
                   );
                 })
               )}
             </select>
             {fieldErrors.planSedeId && (
-              <span className="field-error-text">⚠️ {fieldErrors.planSedeId}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.planSedeId}</span>
             )}
           </div>
         </div>
@@ -472,6 +668,7 @@ const FormularioSuscripcionModal = ({
         {/* DESGLOSE DETALLADO DE TARIFAS Y DURACIÓN DEL PLAN */}
         {form.planSedeId && (
           <div
+            className="info-banner-animated"
             style={{
               background: "var(--bg-surface-elevated, #162032)",
               border: "1px solid var(--border-light)",
@@ -490,7 +687,7 @@ const FormularioSuscripcionModal = ({
                 letterSpacing: "0.5px",
               }}
             >
-              Detalles del Plan y Desglose de Tarifas
+              Detalles del Plan y Desglose de Cobertura
             </div>
 
             {/* DÍAS DEL PLAN */}
@@ -506,15 +703,15 @@ const FormularioSuscripcionModal = ({
               }}
             >
               <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
-                ⏱️ Duración del Plan:
+                ⏱️ Duración a sumar:
               </span>
               <strong style={{ color: "var(--color-brand-primary)", fontSize: "14px" }}>
-                {planSeleccionado?.duracionDias || 30} días de cobertura
+                +{planSeleccionado?.duracionDias || 30} días de cobertura
               </strong>
             </div>
 
             {/* VIGENCIA ESTIMADA */}
-            {form.fechaInicio && (
+            {fechaInicioEfectiva && (
               <div
                 style={{
                   display: "flex",
@@ -525,11 +722,13 @@ const FormularioSuscripcionModal = ({
                   borderBottom: "1px dashed var(--border-light)",
                 }}
               >
-                <span style={{ color: "var(--text-muted)" }}>📅 Periodo Estimado:</span>
+                <span style={{ color: "var(--text-muted)" }}>
+                  📅 {suscripcionVigenteSocio ? "Extensión desde último día:" : "Periodo de Vigencia:"}
+                </span>
                 <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
-                  {new Date(form.fechaInicio + "T00:00:00").toLocaleDateString("es-PE")} →{" "}
+                  {formatearFechaCorta(fechaInicioEfectiva)} →{" "}
                   <strong style={{ color: "var(--color-brand-primary)" }}>
-                    {calcularFechaFin(form.fechaInicio, planSeleccionado?.duracionDias || 30)}
+                    {calcularFechaFin(fechaInicioEfectiva, planSeleccionado?.duracionDias || 30)}
                   </strong>
                 </span>
               </div>
@@ -544,7 +743,9 @@ const FormularioSuscripcionModal = ({
               }}
             >
               <span style={{ color: "var(--text-secondary)" }}>Precio Base de Lista en Sede:</span>
-              <strong style={{ color: "var(--text-main)" }}>S/ {Number(precioBaseSede || 0).toFixed(2)}</strong>
+              <strong style={{ color: "var(--text-main)" }}>
+                S/ {Number(precioBaseSede || 0).toFixed(2)}
+              </strong>
             </div>
             <div
               style={{
@@ -554,10 +755,18 @@ const FormularioSuscripcionModal = ({
                 marginBottom: "8px",
               }}
             >
-              <span style={{ color: form.accesoMultisede ? "var(--color-accent)" : "var(--text-muted)" }}>
+              <span
+                style={{
+                  color: form.accesoMultisede ? "var(--color-accent)" : "var(--text-muted)",
+                }}
+              >
                 Recargo Acceso Multisede {form.accesoMultisede ? "(Aplicado)" : "(Desactivado)"}:
               </span>
-              <strong style={{ color: form.accesoMultisede ? "var(--color-accent)" : "var(--text-muted)" }}>
+              <strong
+                style={{
+                  color: form.accesoMultisede ? "var(--color-accent)" : "var(--text-muted)",
+                }}
+              >
                 + S/ {Number(recargoMultisede || 0).toFixed(2)}
               </strong>
             </div>
@@ -571,8 +780,10 @@ const FormularioSuscripcionModal = ({
                 color: "var(--color-brand-primary)",
               }}
             >
-              <span style={{ fontWeight: 800 }}>Total Calculado a Cobrar:</span>
-              <strong style={{ fontWeight: 800 }}>S/ {Number(form.precioVendido || 0).toFixed(2)}</strong>
+              <span style={{ fontWeight: 700 }}>Total Calculado a Cobrar:</span>
+              <strong style={{ fontWeight: 700 }}>
+                S/ {Number(form.precioVendido || 0).toFixed(2)}
+              </strong>
             </div>
           </div>
         )}
@@ -594,25 +805,35 @@ const FormularioSuscripcionModal = ({
               name="accesoMultisede"
               checked={form.accesoMultisede}
               onChange={handleMultisedeToggle}
-              style={{ width: "18px", height: "18px", accentColor: "var(--color-brand-primary)" }}
+              style={{
+                width: "18px",
+                height: "18px",
+                accentColor: "var(--color-brand-primary)",
+              }}
             />
-            Habilitar acceso Multisede (+ S/ {Number(recargoMultisede || 0).toFixed(2)} para entrenar en todas las sedes)
+            Habilitar acceso Multisede (+ S/ {Number(recargoMultisede || 0).toFixed(2)} para entrenar
+            en todas las sedes)
           </label>
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Fecha de Inicio *</label>
+            <label className="form-label">
+              {suscripcionVigenteSocio
+                ? "Inicio del Nuevo Plan (Último día de suscripción actual) *"
+                : "Fecha de Inicio *"}
+            </label>
             <input
               type="date"
               name="fechaInicio"
-              value={form.fechaInicio}
+              value={fechaInicioEfectiva}
+              min={suscripcionVigenteSocio?.fechaFin || undefined}
               onChange={handleChange}
               className={`form-control ${fieldErrors.fechaInicio ? "is-invalid" : ""}`}
               required
             />
             {fieldErrors.fechaInicio && (
-              <span className="field-error-text">⚠️ {fieldErrors.fechaInicio}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.fechaInicio}</span>
             )}
           </div>
 
@@ -630,7 +851,7 @@ const FormularioSuscripcionModal = ({
               required
             />
             {fieldErrors.precioVendido && (
-              <span className="field-error-text">⚠️ {fieldErrors.precioVendido}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.precioVendido}</span>
             )}
           </div>
         </div>
@@ -661,9 +882,12 @@ const FormularioSuscripcionModal = ({
               value={form.numeroOperacion}
               onChange={handleChange}
               placeholder="Ej. OP-984321 / Yape 1234"
-              className="form-control"
+              className={`form-control ${fieldErrors.numeroOperacion ? "is-invalid" : ""}`}
               maxLength={48}
             />
+            {fieldErrors.numeroOperacion && (
+              <span className="field-error-text">ℹ️ {fieldErrors.numeroOperacion}</span>
+            )}
           </div>
         </div>
 
@@ -674,7 +898,7 @@ const FormularioSuscripcionModal = ({
             name="observacionPrecio"
             value={form.observacionPrecio}
             onChange={handleChange}
-            placeholder="Opcional. Ej. Descuento promocional de apertura"
+            placeholder="Opcional. Ej. Descuento promocional o renovación anticipada"
             className="form-control"
             maxLength={500}
           />

@@ -7,10 +7,32 @@
   }
 }
 
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes scaleUp {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(8px);
+    transform: scale(0.95) translateY(10px);
   }
   to {
     opacity: 1;
@@ -18,14 +40,36 @@
   }
 }
 
-@keyframes slideInRight {
+@keyframes bannerSlideDown {
   from {
     opacity: 0;
-    transform: translateX(30px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes rowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -42,4 +86,35 @@
   50% {
     opacity: 0.6;
   }
+}
+
+/* Clases utilitarias de animación orgánica */
+.content-area > div {
+  animation: pageEnter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.stats-grid > .stat-card {
+  animation: cardReveal 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.stats-grid > .stat-card:nth-child(1) { animation-delay: 20ms; }
+.stats-grid > .stat-card:nth-child(2) { animation-delay: 65ms; }
+.stats-grid > .stat-card:nth-child(3) { animation-delay: 110ms; }
+.stats-grid > .stat-card:nth-child(4) { animation-delay: 155ms; }
+
+.dashboard-asymmetric-grid > div:nth-child(1) {
+  animation: cardReveal 380ms cubic-bezier(0.16, 1, 0.3, 1) 90ms both;
+}
+
+.dashboard-asymmetric-grid > div:nth-child(2) {
+  animation: cardReveal 380ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
+}
+
+.modern-table tbody tr,
+.table tbody tr {
+  animation: rowFadeIn 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.info-banner-animated {
+  animation: bannerSlideDown 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }

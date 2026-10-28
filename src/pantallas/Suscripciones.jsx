@@ -26,6 +26,7 @@ const Suscripciones = () => {
   const [searchTerm, setSearchTerm] = useState("");
 
   const [modalNewOpen, setModalNewOpen] = useState(false);
+  const [socioParaRenovar, setSocioParaRenovar] = useState(null);
 
   // Status Change Modal
   const [modalEstadoOpen, setModalEstadoOpen] = useState(false);
@@ -98,7 +99,7 @@ const Suscripciones = () => {
               <CreditCard size={22} style={{ color: "var(--color-brand-primary)" }} />
               Control de Membresías y Suscripciones
             </h2>
-            <p>Vigencias, renovaciones y contratos activos de los socios</p>
+            <p>Vigencias, renovaciones continuas y contratos activos de los socios</p>
           </div>
 
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
@@ -114,7 +115,10 @@ const Suscripciones = () => {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => setModalNewOpen(true)}
+              onClick={() => {
+                setSocioParaRenovar(null);
+                setModalNewOpen(true);
+              }}
             >
               <Plus size={16} />
               Nueva Suscripción
@@ -191,7 +195,10 @@ const Suscripciones = () => {
               : "No se registran suscripciones con los criterios seleccionados."
           }
           actionLabel="Emitir Nueva Suscripción"
-          onAction={() => setModalNewOpen(true)}
+          onAction={() => {
+            setSocioParaRenovar(null);
+            setModalNewOpen(true);
+          }}
         />
       ) : (
         <div className="table-container">
@@ -204,91 +211,119 @@ const Suscripciones = () => {
                 <th>Vigencia (Inicio → Fin)</th>
                 <th>Monto</th>
                 <th>Estado</th>
-                {isAdmin && <th style={{ textAlign: "right" }}>Acción</th>}
+                <th style={{ textAlign: "right" }}>Acción</th>
               </tr>
             </thead>
             <tbody>
-              {suscripcionesFiltradas.map((sub) => (
-                <tr key={sub.id}>
-                  <td>
-                    <div style={{ fontWeight: 700, color: "var(--text-main)", fontSize: "14px" }}>
-                      {sub.socioNombre || `Socio #${sub.socioId}`}
-                    </div>
-                    {sub.socioDni && (
-                      <div style={{ fontSize: "11.5px", color: "var(--text-muted)", fontFamily: "monospace" }}>
-                        DNI: {sub.socioDni}
+              {suscripcionesFiltradas.map((sub) => {
+                const esFinalizada = sub.estado === "VENCIDA" || sub.estado === "CANCELADA";
+                return (
+                  <tr key={sub.id}>
+                    <td>
+                      <div style={{ fontWeight: 700, color: "var(--text-main)", fontSize: "14px" }}>
+                        {sub.socioNombre || `Socio #${sub.socioId}`}
                       </div>
-                    )}
-                    {sub.accesoMultisede && (
-                      <span className="badge badge-purple" style={{ fontSize: "11px", marginTop: "2px" }}>
-                        Multisede
-                      </span>
-                    )}
-                  </td>
-
-                  <td>
-                    <div style={{ fontWeight: 600, color: "var(--color-brand-primary)" }}>
-                      {sub.nombrePlanVendido || "Plan de Gimnasio"}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                      {sub.duracionDiasVendida} días de cobertura
-                    </div>
-                  </td>
-
-                  <td>
-                    <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                      {sub.sedeNombre || "General"}
-                    </span>
-                  </td>
-
-                  <td>
-                    <div style={{ fontSize: "13px" }}>
-                      <strong>{sub.fechaInicio}</strong> →{" "}
-                      <strong style={{ color: "var(--color-brand-primary)" }}>{sub.fechaFin}</strong>
-                    </div>
-                  </td>
-
-                  <td>
-                    <span style={{ fontWeight: 700, color: "var(--text-main)", fontSize: "14px" }}>
-                      S/ {Number(sub.precioVendido || 0).toFixed(2)}
-                    </span>
-                  </td>
-
-                  <td>
-                    <Badge status={sub.estado} />
-                  </td>
-
-                  {isAdmin && (
-                    <td style={{ textAlign: "right" }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setSubSeleccionada(sub);
-                          setNuevoEstado(sub.estado === "VENCIDA" ? "ACTIVA" : sub.estado);
-                          setMotivoEstado("");
-                          setModalEstadoOpen(true);
-                        }}
-                      >
-                        <SlidersHorizontal size={14} />
-                        Modificar
-                      </button>
+                      {sub.socioDni && (
+                        <div style={{ fontSize: "11.5px", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                          DNI: {sub.socioDni}
+                        </div>
+                      )}
+                      {sub.accesoMultisede && (
+                        <span className="badge badge-purple" style={{ fontSize: "11px", marginTop: "2px" }}>
+                          Multisede
+                        </span>
+                      )}
                     </td>
-                  )}
-                </tr>
-              ))}
+
+                    <td>
+                      <div style={{ fontWeight: 600, color: "var(--color-brand-primary)" }}>
+                        {sub.nombrePlanVendido || "Plan de Gimnasio"}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                        {sub.duracionDiasVendida} días de cobertura
+                      </div>
+                    </td>
+
+                    <td>
+                      <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                        {sub.sedeNombre || "General"}
+                      </span>
+                    </td>
+
+                    <td>
+                      <div style={{ fontSize: "13px" }}>
+                        <strong>{sub.fechaInicio}</strong> →{" "}
+                        <strong style={{ color: "var(--color-brand-primary)" }}>{sub.fechaFin}</strong>
+                      </div>
+                    </td>
+
+                    <td>
+                      <span style={{ fontWeight: 700, color: "var(--text-main)", fontSize: "14px" }}>
+                        S/ {Number(sub.precioVendido || 0).toFixed(2)}
+                      </span>
+                    </td>
+
+                    <td>
+                      <Badge status={sub.estado} />
+                    </td>
+
+                    <td style={{ textAlign: "right" }}>
+                      <div className="table-actions" style={{ justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ color: "var(--color-brand-primary)" }}
+                          onClick={() => {
+                            setSocioParaRenovar({
+                              id: sub.socioId,
+                              nombre: sub.socioNombre || `Socio #${sub.socioId}`,
+                              dni: sub.socioDni || "",
+                              activo: true,
+                            });
+                            setModalNewOpen(true);
+                          }}
+                        >
+                          <Plus size={14} />
+                          {esFinalizada ? "Renovar" : "Sumar Plan"}
+                        </button>
+
+                        {isAdmin && !esFinalizada && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                              setSubSeleccionada(sub);
+                              setNuevoEstado(sub.estado);
+                              setMotivoEstado("");
+                              setModalEstadoOpen(true);
+                            }}
+                          >
+                            <SlidersHorizontal size={14} />
+                            Estado
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* NEW SUBSCRIPTION MODAL */}
+      {/* NEW / EXTEND SUBSCRIPTION MODAL */}
       {modalNewOpen && (
         <FormularioSuscripcionModal
           isOpen={modalNewOpen}
-          onClose={() => setModalNewOpen(false)}
+          socioPreseleccionado={socioParaRenovar}
+          onClose={() => {
+            setModalNewOpen(false);
+            setSocioParaRenovar(null);
+          }}
           onSuccess={() => {
             setModalNewOpen(false);
+            setSocioParaRenovar(null);
             cargarSuscripciones();
           }}
         />

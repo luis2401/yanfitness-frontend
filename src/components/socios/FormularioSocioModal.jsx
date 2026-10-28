@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Modal from "../common/Modal";
 import { sociosService } from "../../api/apiClient";
 import { useAuth } from "../../context/AuthContext";
@@ -13,6 +13,7 @@ const FormularioSocioModal = ({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [sociosPadron, setSociosPadron] = useState([]);
 
   const [form, setForm] = useState({
     dni: "",
@@ -24,6 +25,14 @@ const FormularioSocioModal = ({
   });
 
   useEffect(() => {
+    if (isOpen) {
+      sociosService
+        .listar()
+        .then((data) => {
+          setSociosPadron(Array.isArray(data) ? data : data?.content || []);
+        })
+        .catch(() => setSociosPadron([]));
+    }
     if (socioAEditar) {
       setForm({
         dni: socioAEditar.dni || "",
@@ -46,6 +55,14 @@ const FormularioSocioModal = ({
     setErrorMsg("");
     setFieldErrors({});
   }, [socioAEditar, isOpen]);
+
+  // Detectar si el DNI ingresado ya pertenece a un socio en el padrón
+  const socioExistentePorDni = useMemo(() => {
+    if (socioAEditar) return null;
+    const dniLimpio = (form.dni || "").trim();
+    if (dniLimpio.length !== 8) return null;
+    return sociosPadron.find((s) => s.dni === dniLimpio) || null;
+  }, [form.dni, sociosPadron, socioAEditar]);
 
   // Validaciones individuales de campo
   const validarCampo = (name, value) => {
@@ -80,7 +97,17 @@ const FormularioSocioModal = ({
       }
     } else if (name === "correo") {
       if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) {
-        error = "El correo no es válido. Debe tener el formato usuario@correo.com";
+        error = "El correo debe tener el formato usuario@correo.com";
+      } else if (
+        val &&
+        sociosPadron.some(
+          (s) =>
+            s.correo &&
+            s.correo.trim().toLowerCase() === val.toLowerCase() &&
+            (!socioAEditar || Number(s.id) !== Number(socioAEditar.id))
+        )
+      ) {
+        error = "Este correo electrónico ya se encuentra vinculado a otro socio.";
       }
     }
 
@@ -96,7 +123,6 @@ const FormularioSocioModal = ({
     const { name, value, type, checked } = e.target;
     let finalValue = type === "checkbox" ? checked : value;
 
-    // Filtros de solo números para DNI y Teléfono
     if (name === "dni") {
       finalValue = value.replace(/\D/g, "").slice(0, 8);
     } else if (name === "telefono") {
@@ -108,9 +134,11 @@ const FormularioSocioModal = ({
       [name]: finalValue,
     }));
 
-    // Validar en tiempo real si ya había error previo
     if (fieldErrors[name]) {
       validarCampo(name, finalValue);
+    }
+    if (errorMsg) {
+      setErrorMsg("");
     }
   };
 
@@ -149,7 +177,17 @@ const FormularioSocioModal = ({
     }
 
     if (form.correo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.correo.trim())) {
-      errors.correo = "El correo electrónico no es válido (ejemplo: usuario@dominio.com).";
+      errors.correo = "El correo electrónico debe tener el formato usuario@dominio.com.";
+    } else if (
+      form.correo &&
+      sociosPadron.some(
+        (s) =>
+          s.correo &&
+          s.correo.trim().toLowerCase() === form.correo.trim().toLowerCase() &&
+          (!socioAEditar || Number(s.id) !== Number(socioAEditar.id))
+      )
+    ) {
+      errors.correo = "Este correo electrónico ya está registrado en otro socio.";
     }
 
     setFieldErrors(errors);
@@ -160,9 +198,20 @@ const FormularioSocioModal = ({
     if (e && e.preventDefault) e.preventDefault();
     setErrorMsg("");
 
+    // Si el DNI ya existe en el padrón, pasamos directamente a la venta/renovación con ese socio
+    if (socioExistentePorDni) {
+      showToast(
+        `Socio ${socioExistentePorDni.nombre} ${socioExistentePorDni.apellido || ""} seleccionado del padrón.`,
+        "info"
+      );
+      onSuccess(socioExistentePorDni);
+      return;
+    }
+
     const errors = validarTodoElFormulario();
     if (Object.keys(errors).length > 0) {
-      setErrorMsg("Por favor corrige los campos señalados en rojo antes de continuar.");
+      const firstErr = Object.values(errors)[0];
+      setErrorMsg(firstErr || "Revisa los campos señalados antes de continuar.");
       return;
     }
 
@@ -176,7 +225,7 @@ const FormularioSocioModal = ({
           correo: form.correo?.trim() || null,
           telefono: form.telefono.trim(),
         });
-        showToast("Socio actualizado exitosamente", "success");
+        showToast("Datos del socio actualizados correctamente", "success");
         onSuccess(actualizado);
       } else {
         const nuevo = await sociosService.crear({
@@ -187,11 +236,14 @@ const FormularioSocioModal = ({
           correo: form.correo?.trim() || null,
           activo: form.activo,
         });
-        showToast("Socio registrado. Selecciona su membresía o pase diario para activarlo.", "success");
+        showToast(
+          "Socio registrado. Selecciona su membresía o pase diario para activarlo.",
+          "success"
+        );
         onSuccess(nuevo);
       }
     } catch (err) {
-      setErrorMsg(err.message || "Ocurrió un error al procesar el socio.");
+      setErrorMsg(err.message || "No se pudo completar el registro del socio.");
     } finally {
       setLoading(false);
     }
@@ -218,26 +270,40 @@ const FormularioSocioModal = ({
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading ? "Guardando..." : socioAEditar ? "Guardar Cambios" : "Registrar y Continuar a Venta"}
+            {loading
+              ? "Guardando..."
+              : socioExistentePorDni
+              ? `Continuar a Venta con ${socioExistentePorDni.nombre}`
+              : socioAEditar
+              ? "Guardar Cambios"
+              : "Registrar y Continuar a Venta"}
           </button>
         </>
       }
     >
       <form onSubmit={handleSubmit} noValidate>
         {errorMsg && (
-          <div
-            style={{
-              padding: "10px 14px",
-              backgroundColor: "var(--color-danger-bg)",
-              color: "var(--color-danger-text)",
-              border: "1px solid var(--color-danger-border)",
-              borderRadius: "var(--radius-md)",
-              fontSize: "13px",
-              marginBottom: "16px",
-              fontWeight: 500,
-            }}
-          >
-            {errorMsg}
+          <div className="notice-box notice-box-warning">
+            <span>ℹ️</span>
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {socioExistentePorDni && (
+          <div className="notice-box notice-box-emerald">
+            <span>✨</span>
+            <div>
+              <div style={{ fontWeight: 600, color: "#6ee7b7", marginBottom: "2px" }}>
+                Socio ya registrado en el padrón
+              </div>
+              <div style={{ fontSize: "12.5px", color: "#d1fae5" }}>
+                El DNI <strong>{socioExistentePorDni.dni}</strong> pertenece a{" "}
+                <strong>
+                  {socioExistentePorDni.nombre} {socioExistentePorDni.apellido || ""}
+                </strong>
+                . Haz clic en <strong>Continuar a Venta</strong> para asignarle o extenderle su membresía.
+              </div>
+            </div>
           </div>
         )}
 
@@ -257,7 +323,7 @@ const FormularioSocioModal = ({
               disabled={Boolean(socioAEditar)}
             />
             {fieldErrors.dni && (
-              <span className="field-error-text">{fieldErrors.dni}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.dni}</span>
             )}
           </div>
 
@@ -273,9 +339,10 @@ const FormularioSocioModal = ({
               placeholder="987654321"
               className={`form-control ${fieldErrors.telefono ? "is-invalid" : ""}`}
               required
+              disabled={Boolean(socioExistentePorDni)}
             />
             {fieldErrors.telefono && (
-              <span className="field-error-text">{fieldErrors.telefono}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.telefono}</span>
             )}
           </div>
         </div>
@@ -286,15 +353,16 @@ const FormularioSocioModal = ({
             <input
               type="text"
               name="nombre"
-              value={form.nombre}
+              value={socioExistentePorDni ? socioExistentePorDni.nombre : form.nombre}
               onChange={handleChange}
               onBlur={handleBlur}
               placeholder="Ej. Carlos"
               className={`form-control ${fieldErrors.nombre ? "is-invalid" : ""}`}
               required
+              disabled={Boolean(socioExistentePorDni)}
             />
             {fieldErrors.nombre && (
-              <span className="field-error-text">{fieldErrors.nombre}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.nombre}</span>
             )}
           </div>
 
@@ -303,15 +371,16 @@ const FormularioSocioModal = ({
             <input
               type="text"
               name="apellido"
-              value={form.apellido}
+              value={socioExistentePorDni ? socioExistentePorDni.apellido || "" : form.apellido}
               onChange={handleChange}
               onBlur={handleBlur}
               placeholder="Ej. Morales Pérez"
               className={`form-control ${fieldErrors.apellido ? "is-invalid" : ""}`}
               required
+              disabled={Boolean(socioExistentePorDni)}
             />
             {fieldErrors.apellido && (
-              <span className="field-error-text">{fieldErrors.apellido}</span>
+              <span className="field-error-text">ℹ️ {fieldErrors.apellido}</span>
             )}
           </div>
         </div>
@@ -321,14 +390,15 @@ const FormularioSocioModal = ({
           <input
             type="email"
             name="correo"
-            value={form.correo}
+            value={socioExistentePorDni ? socioExistentePorDni.correo || "" : form.correo}
             onChange={handleChange}
             onBlur={handleBlur}
             placeholder="carlos.morales@gmail.com"
             className={`form-control ${fieldErrors.correo ? "is-invalid" : ""}`}
+            disabled={Boolean(socioExistentePorDni)}
           />
           {fieldErrors.correo && (
-            <span className="field-error-text">{fieldErrors.correo}</span>
+            <span className="field-error-text">ℹ️ {fieldErrors.correo}</span>
           )}
         </div>
       </form>
