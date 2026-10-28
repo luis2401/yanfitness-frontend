@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 const Modal = ({
@@ -25,7 +26,7 @@ const Modal = ({
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className={`modal-container ${size === "lg" ? "modal-lg" : ""}`}
@@ -49,6 +50,10 @@ const Modal = ({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined"
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 };
 
 export default Modal;

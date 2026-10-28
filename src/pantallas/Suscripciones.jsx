@@ -299,6 +299,7 @@ const Suscripciones = () => {
                               nombre: sub.socioNombre || `Socio #${sub.socioId}`,
                               dni: sub.socioDni || "",
                               activo: true,
+                              sedeId: sub.sedeId,
                             });
                             setModalNewOpen(true);
                           }}

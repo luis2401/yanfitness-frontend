@@ -127,7 +127,7 @@ const FormularioSuscripcionModal = ({
       const data = await planesService.obtenerPlanesPorSede(sedeId, true);
       const lista = Array.isArray(data) ? data : [];
 
-      const combinados = lista.map((ps) => {
+      let combinados = lista.map((ps) => {
         const master = plansList.find(
           (m) => m.id === ps.planId || m.nombre === ps.planNombre
         );
@@ -137,6 +137,22 @@ const FormularioSuscripcionModal = ({
           condiciones: master?.condiciones || ps.condiciones || "",
         };
       });
+
+      // Fallback a planes maestros activos si la sede seleccionada aún no tiene tarifas configuradas
+      if (combinados.length === 0 && plansList.length > 0) {
+        combinados = plansList
+          .filter((m) => m.activo)
+          .map((m) => ({
+            id: m.id,
+            planId: m.id,
+            planNombre: m.nombre,
+            duracionDias: m.duracionDias || 30,
+            precioActual: m.precioBase || 0,
+            precioLista: m.precioBase || 0,
+            recargoMultisede: 0,
+            condiciones: m.condiciones || "",
+          }));
+      }
 
       setPlanesSede(combinados);
 
@@ -198,7 +214,9 @@ const FormularioSuscripcionModal = ({
 
         const initialSocioId = socioPreseleccionado?.id || (sList?.[0]?.id ?? "");
         const initialSedeId =
-          sedeTurno && sedesList.some((s) => s.id === sedeTurno.id)
+          socioPreseleccionado?.sedeId && sedesList.some((s) => Number(s.id) === Number(socioPreseleccionado.sedeId))
+            ? socioPreseleccionado.sedeId
+            : sedeTurno && sedesList.some((s) => s.id === sedeTurno.id)
             ? sedeTurno.id
             : sedesList?.[0]?.id ?? "";
 
@@ -485,44 +503,21 @@ const FormularioSuscripcionModal = ({
           </div>
         )}
 
-        {/* AVISO INFORMATIVO AUTOMÁTICO CUANDO EL SOCIO YA TIENE MEMBRESÍA ACTIVA */}
-        {suscripcionVigenteSocio && (
-          <div className="notice-box notice-box-emerald">
-            <span style={{ fontSize: "16px", lineHeight: 1.2 }}>✨</span>
-            <div>
-              <div style={{ fontWeight: 600, color: "#6ee7b7", marginBottom: "2px" }}>
-                Extensión Continua de Membresía Detectada
-              </div>
-              <div style={{ fontSize: "12.5px", color: "#d1fae5" }}>
-                El socio ya cuenta con el plan <strong>{suscripcionVigenteSocio.nombrePlanVendido}</strong> vigente hasta el{" "}
-                <strong>{formatearFechaCorta(suscripcionVigenteSocio.fechaFin)}</strong>. El nuevo plan tomará automáticamente ese último día y sumará{" "}
-                <strong>+{planSeleccionado?.duracionDias || 30} días</strong>, extendiendo su cobertura hasta el{" "}
-                <strong>
-                  {calcularFechaFin(
-                    fechaInicioEfectiva,
-                    planSeleccionado?.duracionDias || 30
-                  )}
-                </strong>.
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* RESUMEN DEL SOCIO SELECCIONADO / RECIÉN REGISTRADO */}
-        {socioActualObj && (
+        {/* RESUMEN DEL SOCIO CUANDO ESTÁ PRESELECCIONADO */}
+        {socioActualObj && socioPreseleccionado && (
           <div
             className="info-banner-animated"
             style={{
               background: "var(--bg-surface-elevated)",
               border: "1px solid var(--border-light)",
               borderRadius: "var(--radius-md)",
-              padding: "14px 16px",
-              marginBottom: "16px",
+              padding: "12px 16px",
+              marginBottom: "14px",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
-              gap: "12px",
+              gap: "10px",
             }}
           >
             <div>
@@ -535,7 +530,7 @@ const FormularioSuscripcionModal = ({
                   letterSpacing: "0.04em",
                 }}
               >
-                Datos del Socio
+                Socio Beneficiario
               </div>
               <div
                 style={{
@@ -549,12 +544,12 @@ const FormularioSuscripcionModal = ({
               </div>
               <div
                 style={{
-                  fontSize: "12.5px",
+                  fontSize: "12px",
                   color: "var(--text-secondary)",
                   display: "flex",
-                  gap: "12px",
+                  gap: "10px",
                   flexWrap: "wrap",
-                  marginTop: "4px",
+                  marginTop: "3px",
                 }}
               >
                 <span>
@@ -570,7 +565,7 @@ const FormularioSuscripcionModal = ({
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "flex-end",
-                gap: "6px",
+                gap: "4px",
               }}
             >
               <span
@@ -581,58 +576,70 @@ const FormularioSuscripcionModal = ({
                     ? "badge-success"
                     : "badge-warning"
                 }`}
-                style={{ fontSize: "11.5px" }}
+                style={{ fontSize: "11px" }}
               >
                 {suscripcionVigenteSocio
-                  ? `Vigente hasta ${formatearFechaCorta(suscripcionVigenteSocio.fechaFin)} · Se sumará el plan`
+                  ? `Vigente hasta ${formatearFechaCorta(suscripcionVigenteSocio.fechaFin)}`
                   : socioActualObj.activo
                   ? "Socio Activo"
                   : "Inactivo · Se activará al cobrar"}
               </span>
-
-              {onSwitchToPaseDiario && !suscripcionVigenteSocio && (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: "11.5px", padding: "4px 10px" }}
-                  onClick={() => onSwitchToPaseDiario(socioActualObj)}
-                >
-                  ¿Solo desea Pase Diario por 1 día?
-                </button>
-              )}
             </div>
           </div>
         )}
 
-        <div className="form-group">
-          <label className="form-label">Socio Beneficiario *</label>
-          <select
-            name="socioId"
-            value={form.socioId}
-            onChange={handleChange}
-            className={`form-control ${fieldErrors.socioId ? "is-invalid" : ""}`}
-            required
-            disabled={Boolean(socioPreseleccionado)}
-          >
-            <option value="">-- Seleccionar socio --</option>
-            {socios.map((s) => {
-              const subS = encontrarUltimaSuscripcionActiva(s.id, suscripcionesActivas);
-              return (
-                <option key={s.id} value={s.id}>
-                  {s.nombre} {s.apellido || ""} (DNI: {s.dni}) —{" "}
-                  {subS
-                    ? `Con plan hasta ${formatearFechaCorta(subS.fechaFin)}`
-                    : s.activo
-                    ? "Activo"
-                    : "Inactivo"}
-                </option>
-              );
-            })}
-          </select>
-          {fieldErrors.socioId && (
-            <span className="field-error-text">ℹ️ {fieldErrors.socioId}</span>
-          )}
-        </div>
+        {/* AVISO COMPACTO DE EXTENSIÓN CONTINUA SI EL SOCIO YA TIENE MEMBRESÍA ACTIVA */}
+        {suscripcionVigenteSocio && (
+          <div className="notice-box notice-box-emerald" style={{ marginBottom: "14px", padding: "10px 14px" }}>
+            <span style={{ fontSize: "15px", lineHeight: 1 }}>🔄</span>
+            <div>
+              <div style={{ fontWeight: 600, color: "#6ee7b7", fontSize: "12.5px" }}>
+                Extensión Continua: Se sumarán +{planSeleccionado?.duracionDias || 30} días
+              </div>
+              <div style={{ fontSize: "11.5px", color: "#d1fae5", marginTop: "2px", lineHeight: 1.4 }}>
+                Membresía actual finaliza el <strong>{formatearFechaCorta(suscripcionVigenteSocio.fechaFin)}</strong>. El nuevo plan sumará días a partir de esa fecha, extendiendo cobertura hasta el{" "}
+                <strong>
+                  {calcularFechaFin(
+                    fechaInicioEfectiva,
+                    planSeleccionado?.duracionDias || 30
+                  )}
+                </strong>.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SELECTOR DE SOCIO: SOLO VISIBLE SI NO HAY SOCIO PRESELECCIONADO */}
+        {!socioPreseleccionado && (
+          <div className="form-group" style={{ marginBottom: "14px" }}>
+            <label className="form-label">Socio Beneficiario *</label>
+            <select
+              name="socioId"
+              value={form.socioId}
+              onChange={handleChange}
+              className={`form-control ${fieldErrors.socioId ? "is-invalid" : ""}`}
+              required
+            >
+              <option value="">-- Seleccionar socio --</option>
+              {socios.map((s) => {
+                const subS = encontrarUltimaSuscripcionActiva(s.id, suscripcionesActivas);
+                return (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre} {s.apellido || ""} (DNI: {s.dni}) —{" "}
+                    {subS
+                      ? `Con plan hasta ${formatearFechaCorta(subS.fechaFin)}`
+                      : s.activo
+                      ? "Activo"
+                      : "Inactivo"}
+                  </option>
+                );
+              })}
+            </select>
+            {fieldErrors.socioId && (
+              <span className="field-error-text">ℹ️ {fieldErrors.socioId}</span>
+            )}
+          </div>
+        )}
 
         <div className="form-row">
           <div className="form-group">
