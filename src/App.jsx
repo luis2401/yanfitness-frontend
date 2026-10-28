@@ -132,7 +132,7 @@ function AppContent() {
       case "planes":
         return <Planes />;
       case "empleados":
-        return esAdminOSupervisor ? <Empleados /> : <Dashboard onNavigate={cambiarPantalla} onQuickAction={handleQuickAction} />;
+        return <Empleados />;
       case "usuarios":
         return isAdmin ? <Usuarios /> : <Dashboard onNavigate={cambiarPantalla} onQuickAction={handleQuickAction} />;
       case "reportes":

@@ -506,9 +506,10 @@
 
 .form-control:disabled {
   background-color: var(--bg-surface-elevated);
-  color: var(--text-disabled);
-  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  border-color: var(--border-light);
   cursor: not-allowed;
+  opacity: 0.9;
 }
 
 .form-control.is-invalid {
@@ -663,6 +664,23 @@ textarea.form-control {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: var(--radius-full);
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .modal-footer {

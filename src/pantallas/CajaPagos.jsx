@@ -26,7 +26,8 @@ import {
 const CajaPagos = () => {
   const { usuario, isAdmin, showToast, sedeTurno } = useAuth();
   const esSupervisor = usuario?.rol === "SUPERVISOR";
-  const puedeAnular = isAdmin || esSupervisor;
+  const esAdminOSupervisor = isAdmin || esSupervisor;
+  const puedeAnular = esAdminOSupervisor;
 
   const [pagos, setPagos] = useState([]);
   const [sedes, setSedes] = useState([]);
@@ -90,7 +91,16 @@ const CajaPagos = () => {
     }
   };
 
-  const totalRecaudado = pagos
+  const pagosVisibles = esAdminOSupervisor
+    ? pagos
+    : pagos.filter(
+        (p) =>
+          !p.vendedorId ||
+          (usuario?.empleadoId && Number(p.vendedorId) === Number(usuario.empleadoId)) ||
+          (usuario?.username && p.vendedorNombre && p.vendedorNombre.toLowerCase().includes(usuario.username.toLowerCase()))
+      );
+
+  const totalRecaudado = pagosVisibles
     .filter((p) => p.estado !== "ANULADO")
     .reduce((acc, curr) => acc + Number(curr.monto || 0), 0);
 
@@ -107,10 +117,14 @@ const CajaPagos = () => {
           <div className="card-title-group">
             <h2 style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <Receipt size={22} style={{ color: "var(--color-brand-primary)" }} />
-              Caja y Cobros ({sedeActualNombre})
+              {esAdminOSupervisor
+                ? `Caja y Cobros Generales (${sedeActualNombre})`
+                : `Mis Ventas y Cobros en Caja (${sedeActualNombre})`}
             </h2>
             <p>
-              Transacciones cobradas • Total Recaudado:{" "}
+              {esAdminOSupervisor
+                ? "Transacciones cobradas • Total Recaudado: "
+                : "Tus ventas registradas (incluye operaciones en sedes donde hayas rotado) • Total Cobrado: "}
               <strong style={{ color: "var(--color-brand-primary)", fontSize: "16px" }}>
                 S/ {totalRecaudado.toFixed(2)}
               </strong>
@@ -185,17 +199,21 @@ const CajaPagos = () => {
         </div>
 
         <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-          Mostrando <strong>{pagos.length}</strong> operaciones registradas
+          Mostrando <strong>{pagosVisibles.length}</strong> operaciones registradas
         </div>
       </div>
 
       {/* PAYMENTS TABLE */}
       {loading ? (
         <LoadingSpinner text="Consultando registro de caja..." />
-      ) : pagos.length === 0 ? (
+      ) : pagosVisibles.length === 0 ? (
         <EmptyState
           title="No hay pagos registrados"
-          description="Los cobros de suscripciones y pases diarios aparecerán aquí con su comprobante."
+          description={
+            esAdminOSupervisor
+              ? "Los cobros de suscripciones y pases diarios de todas las sedes aparecerán aquí."
+              : "Tus cobros registrados aparecerán aquí. Si vendes en otra sede por rotación, también los verás listados."
+          }
           actionLabel="Cobrar Pase Diario"
           onAction={() => setModalPaseOpen(true)}
         />
@@ -217,7 +235,7 @@ const CajaPagos = () => {
                 </tr>
               </thead>
               <tbody>
-                {pagos.map((p) => {
+                {pagosVisibles.map((p) => {
                   const esAnulado = p.estado === "ANULADO";
                   return (
                     <tr key={p.id}>
@@ -326,7 +344,7 @@ const CajaPagos = () => {
       <ModalArqueoCaja
         isOpen={modalArqueoOpen}
         onClose={() => setModalArqueoOpen(false)}
-        pagos={pagos}
+        pagos={pagosVisibles}
         sedeNombre={sedeActualNombre}
         usuario={usuario}
       />

@@ -59,7 +59,7 @@ const esRolAsignableASede = (emp) => {
 const Empleados = () => {
   const { usuario, isAdmin, showToast } = useAuth();
   const esSuperOAdmin = isAdmin || usuario?.rol === "SUPERVISOR";
-  const [activeSubTab, setActiveSubTab] = useState("directorio"); // "directorio" | "rotaciones"
+  const [activeSubTab, setActiveSubTab] = useState(() => (esSuperOAdmin ? "directorio" : "asignaciones"));
 
   // DIRECTORY STATE
   const [empleados, setEmpleados] = useState([]);
@@ -268,13 +268,17 @@ const Empleados = () => {
   const handleOpenAsignacionModal = (empDefault = null) => {
     // Si no es admin ni supervisor, sólo puede rotarse a sí mismo
     let defaultEmpId = "";
-    if (!isAdmin && usuario?.rol !== "SUPERVISOR") {
+    if (!esSuperOAdmin) {
       const selfEmp = empleados.find(
-        (e) => e.correo === usuario?.correo || e.dni === usuario?.dni || Number(e.id) === Number(usuario?.id)
+        (e) =>
+          (usuario?.empleadoId && Number(e.id) === Number(usuario.empleadoId)) ||
+          (usuario?.correo && e.correo && e.correo.toLowerCase() === usuario.correo.toLowerCase()) ||
+          (usuario?.dni && e.dni === usuario.dni) ||
+          (usuario?.id && Number(e.id) === Number(usuario.id))
       );
-      defaultEmpId = selfEmp ? String(selfEmp.id) : (empleadosAsignables[0]?.id ? String(empleadosAsignables[0].id) : "");
+      defaultEmpId = selfEmp ? String(selfEmp.id) : (usuario?.empleadoId ? String(usuario.empleadoId) : "");
     } else {
-      defaultEmpId = empDefault?.id || (empleadosAsignables[0]?.id ? String(empleadosAsignables[0].id) : "");
+      defaultEmpId = empDefault?.id ? String(empDefault.id) : (empleadosAsignables[0]?.id ? String(empleadosAsignables[0].id) : "");
     }
 
     const today = getLocalToday();
@@ -320,7 +324,19 @@ const Empleados = () => {
     e.preventDefault();
     setErrorAsignacion("");
 
-    if (!formAsignacion.empleadoId) {
+    let targetEmpleadoId = formAsignacion.empleadoId;
+    if (!esSuperOAdmin) {
+      const selfEmp = empleados.find(
+        (e) =>
+          (usuario?.empleadoId && Number(e.id) === Number(usuario.empleadoId)) ||
+          (usuario?.correo && e.correo && e.correo.toLowerCase() === usuario.correo.toLowerCase()) ||
+          (usuario?.dni && e.dni === usuario.dni) ||
+          (usuario?.id && Number(e.id) === Number(usuario.id))
+      );
+      targetEmpleadoId = selfEmp ? String(selfEmp.id) : (usuario?.empleadoId ? String(usuario.empleadoId) : formAsignacion.empleadoId);
+    }
+
+    if (!targetEmpleadoId) {
       setErrorAsignacion("Debes seleccionar un colaborador.");
       return;
     }
@@ -337,7 +353,7 @@ const Empleados = () => {
       return;
     }
 
-    const empObj = empleados.find((emp) => Number(emp.id) === Number(formAsignacion.empleadoId));
+    const empObj = empleados.find((emp) => Number(emp.id) === Number(targetEmpleadoId));
     if (empObj && !esRolAsignableASede(empObj)) {
       setErrorAsignacion(
         "Los colaboradores con rol Administrador o Supervisor tienen alcance en todas las sedes y no requieren rotación por sede."
@@ -348,7 +364,7 @@ const Empleados = () => {
     setSavingAsignacion(true);
     try {
       await asignacionesService.asignar({
-        empleadoId: Number(formAsignacion.empleadoId),
+        empleadoId: Number(targetEmpleadoId),
         sedeId: Number(formAsignacion.sedeId),
         fechaDesde: formAsignacion.fechaDesde || null,
         fechaHasta: formAsignacion.fechaHasta || null,
@@ -449,8 +465,27 @@ const Empleados = () => {
     );
   });
 
+  const miEmpleadoId =
+    usuario?.empleadoId ||
+    empleados.find(
+      (e) =>
+        (usuario?.empleadoId && Number(e.id) === Number(usuario.empleadoId)) ||
+        (usuario?.correo && e.correo && e.correo.toLowerCase() === usuario.correo.toLowerCase()) ||
+        (usuario?.dni && e.dni === usuario.dni) ||
+        (usuario?.id && Number(e.id) === Number(usuario.id))
+    )?.id ||
+    null;
+
   // En la pestaña de Rotación solo mostramos rotaciones temporales (tienen fechaHasta definido)
-  const soloRotaciones = asignaciones.filter((a) => Boolean(a.fechaHasta));
+  // Si no es administrador o supervisor, se listan exclusivamente las rotaciones del empleado en sesión
+  const soloRotaciones = asignaciones
+    .filter((a) => Boolean(a.fechaHasta))
+    .filter((a) => {
+      if (!esSuperOAdmin && miEmpleadoId) {
+        return Number(a.empleadoId) === Number(miEmpleadoId);
+      }
+      return true;
+    });
   const totalRotacionesVigentes = soloRotaciones.filter((a) => evaluarEstadoAsignacion(a).esVigente).length;
   const totalRotacionesHistorial = soloRotaciones.filter((a) => !evaluarEstadoAsignacion(a).esVigente).length;
 
@@ -478,10 +513,23 @@ const Empleados = () => {
         <div className="card-header" style={{ margin: 0 }}>
           <div className="card-title-group">
             <h2 style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <Briefcase size={20} style={{ color: "var(--color-brand-primary)" }} />
-              Personal y Asignación de Sedes
+              {esSuperOAdmin ? (
+                <>
+                  <Briefcase size={20} style={{ color: "var(--color-brand-primary)" }} />
+                  Personal y Control de Sedes
+                </>
+              ) : (
+                <>
+                  <Building2 size={20} style={{ color: "var(--color-brand-primary)" }} />
+                  Rotación de Sede de Trabajo
+                </>
+              )}
             </h2>
-            <p className="prose-limit">Directorio de instructores, recepción y control de rotaciones por sede</p>
+            <p className="prose-limit">
+              {esSuperOAdmin
+                ? "Directorio de instructores, recepción y control de rotaciones por sede"
+                : "Consulta tus rotaciones programadas y rota tu sede de trabajo temporalmente"}
+            </p>
           </div>
 
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -514,29 +562,41 @@ const Empleados = () => {
                 </button>
               </>
             )}
+            {!esSuperOAdmin && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleOpenAsignacionModal(null)}
+              >
+                <RefreshCw size={15} />
+                Rotar mi Sede
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* SUB-TABS SELECTOR */}
-      <div className="nav-pills" style={{ marginBottom: "22px" }}>
-        <button
-          type="button"
-          className={`nav-pill ${activeSubTab === "directorio" ? "active" : ""}`}
-          onClick={() => setActiveSubTab("directorio")}
-        >
-          <Dumbbell size={15} />
-          Directorio del Personal ({empleados.length})
-        </button>
-        <button
-          type="button"
-          className={`nav-pill ${activeSubTab === "asignaciones" ? "active" : ""}`}
-          onClick={() => setActiveSubTab("asignaciones")}
-        >
-          <Building2 size={15} />
-          Rotación de Personal ({totalRotacionesVigentes} vigentes)
-        </button>
-      </div>
+      {/* SUB-TABS SELECTOR: SOLO VISIBLE PARA ADMINISTRADORES Y SUPERVISORES */}
+      {esSuperOAdmin && (
+        <div className="nav-pills" style={{ marginBottom: "22px" }}>
+          <button
+            type="button"
+            className={`nav-pill ${activeSubTab === "directorio" ? "active" : ""}`}
+            onClick={() => setActiveSubTab("directorio")}
+          >
+            <Dumbbell size={15} />
+            Directorio del Personal ({empleados.length})
+          </button>
+          <button
+            type="button"
+            className={`nav-pill ${activeSubTab === "asignaciones" ? "active" : ""}`}
+            onClick={() => setActiveSubTab("asignaciones")}
+          >
+            <Building2 size={15} />
+            Rotación de Personal ({totalRotacionesVigentes} vigentes)
+          </button>
+        </div>
+      )}
 
       {/* =========================================================================
           SUB-TAB 1: DIRECTORIO DEL PERSONAL
@@ -775,11 +835,13 @@ const Empleados = () => {
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
                 <Building2 size={18} style={{ color: "var(--color-brand-primary)" }} />
                 <h3 style={{ margin: 0, fontSize: "15.5px", fontWeight: 600, color: "var(--text-main)" }}>
-                  Rotación de Personal entre Sedes
+                  {esSuperOAdmin ? "Rotación de Personal entre Sedes" : "Mi Rotación de Sede de Trabajo"}
                 </h3>
               </div>
               <p className="prose-limit" style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
-                Aquí se gestionan exclusivamente los desplazamientos temporales por días o semanas. Todo el personal operativo puede rotar (los instructores o recepcionistas pueden rotarse ellos mismos; Administradores y Supervisores pueden rotar a cualquier colaborador).
+                {esSuperOAdmin
+                  ? "Aquí se gestionan exclusivamente los desplazamientos temporales por días o semanas. Todo el personal operativo puede rotar (los instructores o recepcionistas pueden rotarse ellos mismos; Administradores y Supervisores pueden rotar a cualquier colaborador)."
+                  : "Programa tu turno o rotación temporal en otra sede (1 día, 2 días, 1 semana, etc.). Al culminar el plazo asignado volverás automáticamente a tu sede base."}
               </p>
             </div>
             <button
@@ -788,7 +850,7 @@ const Empleados = () => {
               onClick={() => handleOpenAsignacionModal(null)}
             >
               <MapPin size={15} />
-              Nueva Rotación
+              {esSuperOAdmin ? "Nueva Rotación" : "Rotar mi Sede"}
             </button>
           </div>
 
@@ -822,25 +884,27 @@ const Empleados = () => {
                 </select>
               </div>
 
-              <div style={{ minWidth: "240px" }}>
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
-                  Filtrar por Colaborador:
-                </label>
-                <select
-                  className="form-control"
-                  value={filtroEmpleadoAsignacion}
-                  onChange={(e) => setFiltroEmpleadoAsignacion(e.target.value)}
-                >
-                  <option value="">Todos los colaboradores</option>
-                  {empleados
-                    .filter((e) => esRolAsignableASede(e))
-                    .map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.nombre} {e.apellido} ({obtenerRolEmpleado(e)})
-                      </option>
-                    ))}
-                </select>
-              </div>
+              {esSuperOAdmin && (
+                <div style={{ minWidth: "240px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                    Filtrar por Colaborador:
+                  </label>
+                  <select
+                    className="form-control"
+                    value={filtroEmpleadoAsignacion}
+                    onChange={(e) => setFiltroEmpleadoAsignacion(e.target.value)}
+                  >
+                    <option value="">Todos los colaboradores</option>
+                    {empleados
+                      .filter((e) => esRolAsignableASede(e))
+                      .map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.nombre} {e.apellido} ({obtenerRolEmpleado(e)})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               {(filtroSedeAsignacion || filtroEmpleadoAsignacion || filtroEstadoAsignacion !== "VIGENTES") && (
                 <button
@@ -1152,7 +1216,7 @@ const Empleados = () => {
       <Modal
         isOpen={modalAsignacionOpen}
         onClose={() => setModalAsignacionOpen(false)}
-        title="Programar Rotación Temporal de Personal"
+        title={esSuperOAdmin ? "Programar Rotación Temporal de Personal" : "Programar Mi Rotación de Sede"}
         footer={
           <>
             <button
@@ -1186,24 +1250,40 @@ const Empleados = () => {
         <form onSubmit={handleSaveAsignacion}>
           <div className="form-group">
             <label className="form-label">Colaborador Operativo *</label>
-            <select
-              className="form-control"
-              required
-              disabled={!esSuperOAdmin}
-              value={formAsignacion.empleadoId}
-              onChange={(e) => setFormAsignacion({ ...formAsignacion, empleadoId: e.target.value })}
-            >
-              <option value="">-- Selecciona un colaborador --</option>
-              {empleadosAsignables.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nombre} {e.apellido} (DNI: {e.dni}) — {obtenerRolEmpleado(e)}
-                </option>
-              ))}
-            </select>
-            {!esSuperOAdmin && (
-              <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
-                Como colaborador, solo puedes programar tu propia rotación de sede.
-              </span>
+            {!esSuperOAdmin ? (
+              <div>
+                <input
+                  type="text"
+                  className="form-control"
+                  disabled
+                  value={
+                    (() => {
+                      const empSel = empleados.find((e) => String(e.id) === String(formAsignacion.empleadoId));
+                      if (empSel) {
+                        return `${empSel.nombre} ${empSel.apellido} (DNI: ${empSel.dni}) — ${obtenerRolEmpleado(empSel)}`;
+                      }
+                      return usuario?.nombreCompleto || usuario?.username || "Tú (Colaborador en Turno)";
+                    })()
+                  }
+                />
+                <span style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
+                  Estás programando tu propia rotación de sede de trabajo.
+                </span>
+              </div>
+            ) : (
+              <select
+                className="form-control"
+                required
+                value={formAsignacion.empleadoId}
+                onChange={(e) => setFormAsignacion({ ...formAsignacion, empleadoId: e.target.value })}
+              >
+                <option value="">-- Selecciona un colaborador --</option>
+                {empleadosAsignables.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.nombre} {e.apellido} (DNI: {e.dni}) — {obtenerRolEmpleado(e)}
+                  </option>
+                ))}
+              </select>
             )}
           </div>
 

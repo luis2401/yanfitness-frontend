@@ -13,10 +13,15 @@ import {
   BarChart3,
   LogOut,
   X,
+  RefreshCw,
 } from "lucide-react";
 
 const Sidebar = ({ activeTab, onSelectTab, isOpen, onCloseMobile, kpis }) => {
   const { usuario, isAdmin, logout } = useAuth();
+
+  const esInstructor = usuario?.rol === "INSTRUCTOR";
+  const esSupervisor = usuario?.rol === "SUPERVISOR";
+  const esAdminOSupervisor = isAdmin || esSupervisor;
 
   const navItems = [
     {
@@ -63,12 +68,12 @@ const Sidebar = ({ activeTab, onSelectTab, isOpen, onCloseMobile, kpis }) => {
       icon: Dumbbell,
       roles: ["ALL"],
     },
-    // Admin Only
+    // Staff / Rotación de Sedes
     {
       id: "empleados",
-      label: "Personal / Staff",
-      icon: Briefcase,
-      roles: ["ADMIN"],
+      label: esAdminOSupervisor ? "Personal / Staff" : "Rotación de Sede",
+      icon: esAdminOSupervisor ? Briefcase : RefreshCw,
+      roles: ["ALL"],
     },
     {
       id: "usuarios",
@@ -83,10 +88,6 @@ const Sidebar = ({ activeTab, onSelectTab, isOpen, onCloseMobile, kpis }) => {
       roles: ["ADMIN", "SUPERVISOR"],
     },
   ];
-
-  const esInstructor = usuario?.rol === "INSTRUCTOR";
-  const esSupervisor = usuario?.rol === "SUPERVISOR";
-  const esAdminOSupervisor = isAdmin || esSupervisor;
 
   const filteredNav = navItems.filter((item) => {
     // Si el rol es Instructor, en la navegación únicamente ve Clases y Horarios

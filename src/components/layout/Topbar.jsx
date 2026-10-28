@@ -10,7 +10,7 @@ import {
   Shield,
   Sun,
   Moon,
-  MapPin,
+  RefreshCw,
 } from "lucide-react";
 
 const Topbar = ({
@@ -89,52 +89,6 @@ const Topbar = ({
       </div>
 
       <div className="topbar-right">
-        {/* SEDE ACTIVA SELECTOR: VISIBLE PARA TODOS LOS ROLES EXCEPTO ADMINISTRADOR Y SUPERVISOR */}
-        {!isRolGlobal && sedesList?.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "6px 12px",
-              borderRadius: "var(--radius-md)",
-              background: "var(--bg-surface-elevated)",
-              border: "1px solid var(--border-light)",
-              fontSize: "12.5px",
-              color: "var(--text-main)",
-            }}
-            title="Sede activa en el turno actual"
-          >
-            <MapPin size={14} style={{ color: "var(--text-muted)" }} />
-            <span style={{ color: "var(--text-muted)", fontSize: "11.5px", fontWeight: 500 }}>Sede:</span>
-            <select
-              value={sedeTurno?.id || ""}
-              onChange={(e) => {
-                const sel = sedesList.find((s) => String(s.id) === String(e.target.value));
-                if (sel) {
-                  setSedeTurno(sel);
-                  showToast(`Sede activa: ${sel.nombre}`, "info");
-                }
-              }}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "var(--text-main)",
-                fontWeight: 600,
-                fontSize: "12.5px",
-                cursor: "pointer",
-                outline: "none",
-              }}
-            >
-              {sedesList.map((s) => (
-                <option key={s.id} value={s.id} style={{ background: "var(--bg-surface)", color: "var(--text-main)" }}>
-                  {s.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
         {/* SECONDARY QUICK ACTION: PASE DIARIO */}
         <button
           type="button"
@@ -316,6 +270,21 @@ const Topbar = ({
                 >
                   <Shield size={16} />
                   <span>Usuarios y Seguridad</span>
+                </button>
+              )}
+
+              {!isRolGlobal && usuario?.rol !== "INSTRUCTOR" && (
+                <button
+                  type="button"
+                  className="sidebar-item"
+                  style={{ color: "var(--text-main)", padding: "8px 12px" }}
+                  onClick={() => {
+                    setUserDropdownOpen(false);
+                    onNavigateToTab("empleados");
+                  }}
+                >
+                  <RefreshCw size={16} />
+                  <span>Rotación de Sede</span>
                 </button>
               )}
 
