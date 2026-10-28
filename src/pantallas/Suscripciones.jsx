@@ -40,8 +40,27 @@ const Suscripciones = () => {
     try {
       setLoading(true);
       if (activeTab === "POR_VENCER") {
-        const data = await suscripcionesService.obtenerPorVencer(7);
-        setSuscripciones(Array.isArray(data) ? data : data?.content || []);
+        const [porVencerData, todasActivasData] = await Promise.all([
+          suscripcionesService.obtenerPorVencer(7).catch(() => []),
+          suscripcionesService.listar({ estado: "ACTIVA" }).catch(() => []),
+        ]);
+        const listaPorVencer = Array.isArray(porVencerData) ? porVencerData : porVencerData?.content || [];
+        const todasActivas = Array.isArray(todasActivasData) ? todasActivasData : todasActivasData?.content || [];
+
+        // Doble salvaguarda: si el socio tiene otra suscripción activa cuya fechaFin sea posterior a la que está por vencer,
+        // significa que ya renovó / extendió y no debe mostrarse como por vencer.
+        const filtradas = listaPorVencer.filter((sub) => {
+          const tieneMembresiaPosterior = todasActivas.some(
+            (otra) =>
+              Number(otra.socioId) === Number(sub.socioId) &&
+              Number(otra.id) !== Number(sub.id) &&
+              otra.fechaFin > sub.fechaFin &&
+              otra.estado === "ACTIVA"
+          );
+          return !tieneMembresiaPosterior;
+        });
+
+        setSuscripciones(filtradas);
       } else {
         const estadoParam = activeTab === "TODAS" ? undefined : activeTab;
         const data = await suscripcionesService.listar({ estado: estadoParam });

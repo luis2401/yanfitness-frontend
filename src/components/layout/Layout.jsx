@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import { useAuth } from "../../context/AuthContext";
-import { dashboardService } from "../../api/apiClient";
+import { dashboardService, suscripcionesService } from "../../api/apiClient";
 import FormularioSocioModal from "../socios/FormularioSocioModal";
 import FormularioPaseDiarioModal from "../pagos/FormularioPaseDiarioModal";
 import FormularioSuscripcionModal from "../suscripciones/FormularioSuscripcionModal";
@@ -22,8 +22,33 @@ const Layout = ({ activeTab, onSelectTab, children }) => {
 
   const fetchKpis = useCallback(async () => {
     try {
-      const data = await dashboardService.getDashboard();
-      setKpis(data);
+      const [dashData, porVencerData, todasActivasData] = await Promise.all([
+        dashboardService.getDashboard().catch(() => null),
+        suscripcionesService.obtenerPorVencer(7).catch(() => []),
+        suscripcionesService.listar({ estado: "ACTIVA" }).catch(() => []),
+      ]);
+
+      if (dashData) {
+        const listaPorVencer = Array.isArray(porVencerData) ? porVencerData : porVencerData?.content || [];
+        const todasActivas = Array.isArray(todasActivasData) ? todasActivasData : todasActivasData?.content || [];
+
+        // Filtrar candidatos cuyo socio ya tenga OTRA suscripción activa con fecha posterior
+        const porVencerReales = listaPorVencer.filter((sub) => {
+          const tieneMembresiaPosterior = todasActivas.some(
+            (otra) =>
+              Number(otra.socioId) === Number(sub.socioId) &&
+              Number(otra.id) !== Number(sub.id) &&
+              otra.fechaFin > sub.fechaFin &&
+              otra.estado === "ACTIVA"
+          );
+          return !tieneMembresiaPosterior;
+        });
+
+        setKpis({
+          ...dashData,
+          suscripcionesPorVencer7Dias: porVencerReales.length,
+        });
+      }
     } catch {
       // Ignored
     }

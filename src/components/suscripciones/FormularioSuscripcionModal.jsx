@@ -25,7 +25,7 @@ const FormularioSuscripcionModal = ({
   onSuccess,
   onSwitchToPaseDiario = null,
 }) => {
-  const { showToast, sedeTurno } = useAuth();
+  const { usuario, showToast, sedeTurno } = useAuth();
   const [socios, setSocios] = useState([]);
   const [sedes, setSedes] = useState([]);
   const [planesSede, setPlanesSede] = useState([]);
