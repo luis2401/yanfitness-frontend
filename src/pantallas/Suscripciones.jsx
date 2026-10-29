@@ -54,6 +54,20 @@ const Suscripciones = () => {
       .catch(() => {});
   }, []);
 
+  // Días que faltan para el vencimiento (negativo si ya venció)
+  const calcularDiasRestantes = (fechaFin) => {
+    if (!fechaFin) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fin = new Date(fechaFin + "T00:00:00");
+    return Math.ceil((fin - hoy) / (1000 * 60 * 60 * 24));
+  };
+
+  const esVencida = (sub) => {
+    const dias = calcularDiasRestantes(sub.fechaFin);
+    return sub.estado === "VENCIDA" || (dias !== null && dias < 0);
+  };
+
   const abrirWhatsAppRenovacion = (sub) => {
     const tel = sub.socioTelefono || telefonosSocios[sub.socioId];
     if (!tel) {
@@ -63,29 +77,36 @@ const Suscripciones = () => {
     const cleanTel = tel.replace(/\D/g, "");
     const numFinal = cleanTel.startsWith("51") ? cleanTel : `51${cleanTel}`;
 
-    let diasTexto = "";
-    if (sub.fechaFin) {
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const fin = new Date(sub.fechaFin + "T00:00:00");
-      const diff = Math.ceil((fin - hoy) / (1000 * 60 * 60 * 24));
-      if (diff > 1) {
-        diasTexto = `en ${diff} días (el ${sub.fechaFin})`;
-      } else if (diff === 1) {
-        diasTexto = `mañana (${sub.fechaFin})`;
-      } else if (diff === 0) {
-        diasTexto = `HOY (${sub.fechaFin})`;
-      } else {
-        diasTexto = `el ${sub.fechaFin} (vencida)`;
-      }
-    }
-
     const nombre = sub.socioNombre || "Estimado socio";
     const plan = sub.nombrePlanVendido || "tu membresía";
-    const mensaje = encodeURIComponent(
-      `Hola ${nombre}, te saludamos de YanFitness 💪.\nQueremos recordarte que tu plan ${plan} vence ${diasTexto}.\n\n¡Renueva con anticipación para no perder tus entrenamientos! 🏋️‍♂️ Responde a este mensaje para coordinar tu renovación.`
-    );
-    window.open(`https://wa.me/${numFinal}?text=${mensaje}`, "_blank");
+    const dias = calcularDiasRestantes(sub.fechaFin);
+
+    let texto;
+    if (esVencida(sub)) {
+      // Membresía ya vencida: invitación a regresar
+      texto =
+        `Hola ${nombre}, te saludamos de YanFitness 💪.\n` +
+        `Tu plan ${plan} venció el ${sub.fechaFin} y te extrañamos en el gimnasio.\n\n` +
+        `Renueva hoy y retoma tus entrenamientos sin perder tu progreso. ` +
+        `Responde a este mensaje y te ayudamos con tu renovación.`;
+    } else if (dias !== null && dias <= 10) {
+      // 10 días o menos: mensaje de urgencia
+      const cuando = dias === 0 ? "HOY" : dias === 1 ? "MAÑANA" : `en ${dias} días`;
+      texto =
+        `Hola ${nombre}, te saludamos de YanFitness 💪.\n` +
+        `⚠️ Tu plan ${plan} está pronto a vencer: vence ${cuando} (${sub.fechaFin}).\n\n` +
+        `¡Renueva ahora! Tu nuevo plan empezará justo cuando termine el actual, así no pierdes ningún día. ` +
+        `Responde a este mensaje para coordinar tu renovación.`;
+    } else {
+      // Más de 10 días: recordatorio informativo
+      texto =
+        `Hola ${nombre}, te saludamos de YanFitness 💪.\n` +
+        `Te recordamos que tu plan ${plan} está vigente y vence el ${sub.fechaFin} (faltan ${dias} días).\n\n` +
+        `Si deseas, puedes renovarlo con anticipación: los días se suman al final de tu plan actual. ` +
+        `¡Cualquier consulta, escríbenos por aquí!`;
+    }
+
+    window.open(`https://wa.me/${numFinal}?text=${encodeURIComponent(texto)}`, "_blank");
   };
 
   const cargarSuscripciones = async () => {
@@ -358,10 +379,20 @@ const Suscripciones = () => {
                             cursor: "pointer",
                           }}
                           onClick={() => abrirWhatsAppRenovacion(sub)}
-                          title="Enviar recordatorio de renovación por WhatsApp"
+                          title={
+                            esVencida(sub)
+                              ? "Invitar a renovar (membresía vencida)"
+                              : calcularDiasRestantes(sub.fechaFin) <= 10
+                              ? "Avisar: pronto a vencer, renueva ahora"
+                              : "Enviar recordatorio de vigencia"
+                          }
                         >
                           <MessageCircle size={14} />
-                          {activeTab === "POR_VENCER" ? "Avisar WhatsApp" : "WhatsApp"}
+                          {esVencida(sub)
+                            ? "Renovar (vencida)"
+                            : calcularDiasRestantes(sub.fechaFin) <= 10
+                            ? `Avisar · ${calcularDiasRestantes(sub.fechaFin)}d`
+                            : "WhatsApp"}
                         </button>
 
                         <button
