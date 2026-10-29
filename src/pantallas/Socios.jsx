@@ -20,6 +20,7 @@ import {
   CreditCard,
   Phone,
   Mail,
+  MessageCircle,
 } from "lucide-react";
 
 const Socios = () => {
@@ -91,6 +92,19 @@ const Socios = () => {
     } catch (err) {
       showToast(err.message || "Error al eliminar el socio", "error");
     }
+  };
+
+  const abrirWhatsAppSocio = (socio) => {
+    if (!socio.telefono) {
+      showToast("El socio no tiene un teléfono registrado para WhatsApp", "warning");
+      return;
+    }
+    const cleanTel = socio.telefono.replace(/\D/g, "");
+    const numFinal = cleanTel.startsWith("51") ? cleanTel : `51${cleanTel}`;
+    const mensaje = encodeURIComponent(
+      `Hola ${socio.nombre}, te saludamos desde la recepción de YanFitness 💪. ¿En qué podemos ayudarte el día de hoy?`
+    );
+    window.open(`https://wa.me/${numFinal}?text=${mensaje}`, "_blank");
   };
 
   const sociosFiltrados = useMemo(() => {
@@ -267,9 +281,27 @@ const Socios = () => {
                   <td>
                     <div style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "12px" }}>
                       {socio.telefono && (
-                        <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-secondary)" }}>
-                          <Phone size={12} style={{ color: "var(--color-brand-primary)" }} /> {socio.telefono}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-secondary)" }}>
+                            <Phone size={12} style={{ color: "var(--color-brand-primary)" }} /> {socio.telefono}
+                          </span>
+                          <button
+                            type="button"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "0",
+                              color: "#25D366",
+                              display: "inline-flex",
+                              alignItems: "center",
+                            }}
+                            title="Contactar al socio por WhatsApp"
+                            onClick={() => abrirWhatsAppSocio(socio)}
+                          >
+                            <MessageCircle size={14} />
+                          </button>
+                        </div>
                       )}
                       {socio.correo && (
                         <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-muted)" }}>
@@ -294,6 +326,19 @@ const Socios = () => {
 
                   <td>
                     <div className="table-actions" style={{ justifyContent: "flex-end" }}>
+                      {/* WHATSAPP RÁPIDO */}
+                      {socio.telefono && (
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          title="Enviar WhatsApp al socio"
+                          style={{ color: "#25D366" }}
+                          onClick={() => abrirWhatsAppSocio(socio)}
+                        >
+                          <MessageCircle size={16} />
+                        </button>
+                      )}
+
                       {/* VER DETALLE */}
                       <button
                         type="button"

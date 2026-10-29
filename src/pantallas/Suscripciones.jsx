@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { suscripcionesService } from "../api/apiClient";
+import { suscripcionesService, sociosService } from "../api/apiClient";
 import { useAuth } from "../context/AuthContext";
 import Badge from "../components/common/Badge";
 import EmptyState from "../components/common/EmptyState";
@@ -17,6 +17,7 @@ import {
   DollarSign,
   AlertTriangle,
   SlidersHorizontal,
+  MessageCircle,
 } from "lucide-react";
 
 const Suscripciones = () => {
@@ -35,6 +36,57 @@ const Suscripciones = () => {
   const [nuevoEstado, setNuevoEstado] = useState("ACTIVA");
   const [motivoEstado, setMotivoEstado] = useState("");
   const [savingEstado, setSavingEstado] = useState(false);
+
+  // Teléfonos en memoria para contacto WhatsApp
+  const [telefonosSocios, setTelefonosSocios] = useState({});
+
+  useEffect(() => {
+    sociosService
+      .listar()
+      .then((res) => {
+        const lista = Array.isArray(res) ? res : res?.content || [];
+        const map = {};
+        lista.forEach((s) => {
+          if (s.id && s.telefono) map[s.id] = s.telefono;
+        });
+        setTelefonosSocios(map);
+      })
+      .catch(() => {});
+  }, []);
+
+  const abrirWhatsAppRenovacion = (sub) => {
+    const tel = sub.socioTelefono || telefonosSocios[sub.socioId];
+    if (!tel) {
+      showToast("El socio no tiene un teléfono registrado para WhatsApp", "warning");
+      return;
+    }
+    const cleanTel = tel.replace(/\D/g, "");
+    const numFinal = cleanTel.startsWith("51") ? cleanTel : `51${cleanTel}`;
+
+    let diasTexto = "";
+    if (sub.fechaFin) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const fin = new Date(sub.fechaFin + "T00:00:00");
+      const diff = Math.ceil((fin - hoy) / (1000 * 60 * 60 * 24));
+      if (diff > 1) {
+        diasTexto = `en ${diff} días (el ${sub.fechaFin})`;
+      } else if (diff === 1) {
+        diasTexto = `mañana (${sub.fechaFin})`;
+      } else if (diff === 0) {
+        diasTexto = `HOY (${sub.fechaFin})`;
+      } else {
+        diasTexto = `el ${sub.fechaFin} (vencida)`;
+      }
+    }
+
+    const nombre = sub.socioNombre || "Estimado socio";
+    const plan = sub.nombrePlanVendido || "tu membresía";
+    const mensaje = encodeURIComponent(
+      `Hola ${nombre}, te saludamos de YanFitness 💪.\nQueremos recordarte que tu plan ${plan} vence ${diasTexto}.\n\n¡Renueva con anticipación para no perder tus entrenamientos! 🏋️‍♂️ Responde a este mensaje para coordinar tu renovación.`
+    );
+    window.open(`https://wa.me/${numFinal}?text=${mensaje}`, "_blank");
+  };
 
   const cargarSuscripciones = async () => {
     try {
@@ -289,6 +341,29 @@ const Suscripciones = () => {
 
                     <td style={{ textAlign: "right" }}>
                       <div className="table-actions" style={{ justifyContent: "flex-end" }}>
+                        {/* BOTÓN WHATSAPP RENOVACIÓN */}
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{
+                            background: "#25D366",
+                            color: "#FFFFFF",
+                            border: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontWeight: 600,
+                            padding: "6px 10px",
+                            borderRadius: "var(--radius-sm)",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => abrirWhatsAppRenovacion(sub)}
+                          title="Enviar recordatorio de renovación por WhatsApp"
+                        >
+                          <MessageCircle size={14} />
+                          {activeTab === "POR_VENCER" ? "Avisar WhatsApp" : "WhatsApp"}
+                        </button>
+
                         <button
                           type="button"
                           className="btn btn-secondary btn-sm"
